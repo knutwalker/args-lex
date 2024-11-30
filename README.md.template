@@ -53,6 +53,14 @@ exe.root_module.addImport("args-lex", b.dependency("args-lex", .{{}}).module("ar
 
 ## Examples
 
+### Demo
+
+A simple demo, showing the basics of the API:
+
+```zig
+{[demo]s}
+```
+
 ## License
 
 {[name]s} is licensed under the [MIT License](http://opensource.org/licenses/MIT)
