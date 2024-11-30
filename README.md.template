@@ -61,6 +61,14 @@ A simple demo, showing the basics of the API:
 {[demo]s}
 ```
 
+### Usage
+
+A more detailed example showing more usage patterns:
+
+```zig
+{[usage]s}
+```
+
 ## License
 
 {[name]s} is licensed under the [MIT License](http://opensource.org/licenses/MIT)

@@ -63,7 +63,7 @@ pub fn build(b: *std.Build) void {
     // }}}
 
     // examples {{{
-    const Examples = enum { demo };
+    const Examples = enum { demo, usage };
     const example_option = b.option(Examples, "example", "The example to run");
 
     inline for (comptime std.meta.tags(Examples)) |example_tag| {
@@ -81,6 +81,12 @@ pub fn build(b: *std.Build) void {
 
         const run_example = b.addRunArtifact(example);
         switch (example_tag) {
+            .usage => {
+                run_example.addArgs(&.{
+                    "-a",     "-42", "-bcdef", "--flag",    "--long=value",
+                    "--also", "yes", "--",     "remaining", "--args",
+                });
+            },
             .demo => {
                 if (b.args) |args| {
                     run_example.addArgs(args);
@@ -116,6 +122,7 @@ pub fn build(b: *std.Build) void {
                 .name = "args-lex",
                 .repo = "https://github.com/knutwalker/args-lex",
                 .demo = read("examples/demo.zig"),
+                .usage = read("examples/usage.zig"),
             });
         }
     }.make;
