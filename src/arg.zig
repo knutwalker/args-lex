@@ -51,6 +51,15 @@ pub const Arg = union(enum) {
             }
         }
 
+        /// Return the next flag if it is a valid unicode codepoint
+        /// or null if it isn't.
+        pub fn nextFlag(self: *Shorts) ?u21 {
+            switch (self.next() orelse return null) {
+                .flag => |flag| return flag,
+                .suffix => return null,
+            }
+        }
+
         /// Returns all remaining short flags as a single value
         pub fn value(self: *Shorts) [:0]const u8 {
             defer self.flags = "";
@@ -131,6 +140,13 @@ pub const Arg = union(enum) {
         try t.expectEqual('j', value_with_equals.next().?.flag);
         try t.expectEqualStrings("12", value_with_equals.value());
         try t.expect(value_with_equals.next() == null);
+
+        var invalid_utf8_flag = Shorts{ .flags = "abc\xFFdef" };
+        try t.expectEqual('a', invalid_utf8_flag.nextFlag().?);
+        try t.expectEqual('b', invalid_utf8_flag.nextFlag().?);
+        try t.expectEqual('s', invalid_utf8_flag.nextFlag().?);
+        try t.expectEqual(null, invalid_utf8_flag.nextFlag());
+        try t.expect(invalid_utf8_flag.next() == null);
     }
 };
 
