@@ -49,7 +49,7 @@ exe.root_module.addImport("args-lex", b.dependency("args-lex", .{}).module("args
 ```
 
 > [!IMPORTANT]
-> `args-lex` tracks Zig `0.14.0-dev.1911+3bf89f55c` (`2024.10.0-mach`)
+> `args-lex` tracks Zig `0.13.0`
 
 ## Examples
 

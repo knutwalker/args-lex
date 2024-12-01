@@ -35,8 +35,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
-        zig: [2024.10.0-mach]
-        step: [test, example]
+        zig: [0.13.0]
         optimize: [Debug, ReleaseSafe, ReleaseFast]
     runs-on: ${{ matrix.os }}
     steps:
@@ -47,4 +46,6 @@ jobs:
         with:
           version: ${{ matrix.zig }}
       - name: Run tests
-        run: zig build ${{ matrix.step }} -Doptimize=${{ matrix.optimize }}
+        run: zig build test -Doptimize=${{ matrix.optimize }}
+      - name: Run example tests
+        run: zig build example -Doptimize=${{ matrix.optimize }}
