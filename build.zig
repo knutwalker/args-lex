@@ -116,7 +116,7 @@ pub fn build(b: *std.Build) void {
             return content;
         }
 
-        fn make(_: *std.Build.Step, _: std.Progress.Node) anyerror!void {
+        fn make(_: *std.Build.Step, _: std.Build.Step.MakeOptions) anyerror!void {
             var readme_file = try std.fs.cwd().createFile("README.md", .{});
             try readme_file.writer().print(@embedFile("README.md.template"), .{
                 .name = "args-lex",
