@@ -1,0 +1,50 @@
+name: checks
+
+on:
+  push:
+    branches:
+      - main
+  merge_group:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: Check code
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Zig
+        uses: mlugg/setup-zig@v1
+        with:
+          version: 2024.10.0-mach
+      - name: Run check
+        run: zig build check
+      - name: Check formatting
+        run: zig fmt --check .
+      - name: Check readme
+        run: |
+          zig build readme
+          git diff --exit-code -- README.md
+
+  unit-tests:
+    name: Run unit tests
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        zig: [0.13.0, 2024.10.0-mach]
+        step: [test, example]
+        optimize: [Debug, ReleaseSafe, ReleaseFast]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Zig
+        uses: mlugg/setup-zig@v1
+        with:
+          version: ${{ matrix.zig }}
+      - name: Run tests
+        run: zig build ${{ matrix.step }} -Doptimize=${{ matrix.optimize }}
