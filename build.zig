@@ -75,7 +75,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
             .single_threaded = true,
         });
-        example.root_module.addImport("args_lex", mod);
+        example.root_module.addImport("args-lex", mod);
 
         const install_example = b.addInstallArtifact(example, .{});
 

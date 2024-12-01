@@ -60,7 +60,7 @@ A simple demo, showing the basics of the API:
 ```zig
 const std = @import("std");
 
-const args_lex = @import("args_lex");
+const args_lex = @import("args-lex");
 
 pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -97,7 +97,7 @@ A more detailed example showing more usage patterns:
 ```zig
 const std = @import("std");
 
-const args_lex = @import("args_lex");
+const args_lex = @import("args-lex");
 
 pub fn main() !void {
     var gpa: std.heap.GeneralPurposeAllocator(.{}) = .{};

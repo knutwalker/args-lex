@@ -2,7 +2,7 @@
 
 const std = @import("std");
 
-const args_lex = @import("args_lex");
+const args_lex = @import("args-lex");
 
 pub fn main() !void {
     var gpa: std.heap.GeneralPurposeAllocator(.{}) = .{};
