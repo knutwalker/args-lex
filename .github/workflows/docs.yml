@@ -1,0 +1,43 @@
+name: Build and publish API docs
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# If two concurrent runs are started, prefer the latest one.
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build website
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: mlugg/setup-zig@v1
+      with:
+        version: 0.13.0
+    - name: Build
+      run: zig build docs
+    - name: Upload
+      uses: actions/upload-pages-artifact@v2
+      with:
+        path: "zig-out/docs/"
+
+  publish:
+    name: Publish website
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      # Request sufficient permissions to publish the website.
+      pages: write
+      id-token: write
+    steps:
+    - name: Deploy to GitHub Pages
+      id: deployment
+      uses: actions/deploy-pages@v3
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
