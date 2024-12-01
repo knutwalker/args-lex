@@ -19,6 +19,7 @@ jobs:
     - uses: mlugg/setup-zig@v1
       with:
         version: 0.13.0
+        use-cache: false
     - name: Build
       run: zig build docs
     - name: Upload
