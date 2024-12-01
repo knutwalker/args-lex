@@ -7,10 +7,12 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run unit tests");
     const docs_step = b.step("docs", "Generate docs");
     const example_step = b.step("example", "Run an example");
+    var readme_step = b.step("readme", "Generate the README");
 
     const all_step = b.step("all", "Build everything");
     all_step.dependOn(test_step);
     all_step.dependOn(example_step);
+    all_step.dependOn(readme_step);
     b.default_step.dependOn(all_step);
 
     const target = b.standardTargetOptions(.{});
@@ -90,4 +92,26 @@ pub fn build(b: *std.Build) void {
     }
     // }}}
 
+    // readme {{{
+    readme_step.id = .custom;
+    readme_step.makeFn = struct {
+        fn read(comptime file: []const u8) []const u8 {
+            var content = @as([]const u8, @embedFile(file));
+            if (std.mem.startsWith(u8, content, "// SPDX-License-Identifier")) {
+                const line_end = std.mem.indexOfScalar(u8, content, '\n').?;
+                content = content[line_end + 2 ..];
+            }
+            return content;
+        }
+
+        fn make(_: *std.Build.Step, _: std.Progress.Node) anyerror!void {
+            var readme_file = try std.fs.cwd().createFile("README.md", .{});
+            try readme_file.writer().print(@embedFile("README.md.template"), .{
+                .name = "args-lex",
+                .repo = "https://github.com/knutwalker/args-lex",
+            });
+        }
+    }.make;
+    readme_step.dependOn(example_step);
+    // }}}
 }
