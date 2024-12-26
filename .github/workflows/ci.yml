@@ -29,7 +29,6 @@ jobs:
         uses: mlugg/setup-zig@v1
         with:
           version: ${{ env.ZIG_VERSION }}
-          use-cache: false
       - name: Run check
         run: zig build check
       - name: Check formatting
@@ -55,7 +54,6 @@ jobs:
         uses: mlugg/setup-zig@v1
         with:
           version: ${{ env.ZIG_VERSION }}
-          use-cache: false
       - name: Build docs
         run: zig build docs
       - name: Upload docs
