@@ -107,7 +107,7 @@ pub const Arg = union(enum) {
     /// The provided `flags` is a tuple of either short flag chars or
     /// long flag strings, both *without* their leading `-`
     /// ,e.g. `.{ "help", 'h' }`
-    pub fn hasFlag(self: *const Arg, flags: anytype) bool {
+    pub fn isFlag(self: *const Arg, flags: anytype) bool {
         return self.flagOf(flags) catch .long != null;
     }
 
@@ -290,26 +290,26 @@ pub const Arg = union(enum) {
         try t.expect(invalid_utf8_flag.next() == null);
     }
 
-    test hasFlag {
+    test isFlag {
         const expect = std.testing.expectEqual;
 
         var short_arg = Arg{ .shorts = .{ .flags = "help" } };
-        try expect(true, short_arg.hasFlag(.{ 'h', "help" }));
-        try expect(false, short_arg.hasFlag(.{ 'v', "value" }));
+        try expect(true, short_arg.isFlag(.{ 'h', "help" }));
+        try expect(false, short_arg.isFlag(.{ 'v', "value" }));
 
         var long_arg = Arg{ .long = .{ .flag = "help", .value = null } };
-        try expect(true, long_arg.hasFlag(.{ 'h', "help" }));
-        try expect(false, long_arg.hasFlag(.{ 'v', "value" }));
+        try expect(true, long_arg.isFlag(.{ 'h', "help" }));
+        try expect(false, long_arg.isFlag(.{ 'v', "value" }));
 
         var long_arg_with_value = Arg{ .long = .{ .flag = "help", .value = "foo" } };
-        try expect(false, long_arg_with_value.hasFlag(.{ 'v', "value" }));
+        try expect(false, long_arg_with_value.isFlag(.{ 'v', "value" }));
 
         // runtime values
         var short_flag: u8 = 'h';
         var long_flag: []const u8 = "help";
         _ = .{ &short_flag, &long_flag };
-        try expect(true, short_arg.hasFlag(.{ short_flag, long_flag }));
-        try expect(true, long_arg.hasFlag(.{ short_flag, long_flag }));
+        try expect(true, short_arg.isFlag(.{ short_flag, long_flag }));
+        try expect(true, long_arg.isFlag(.{ short_flag, long_flag }));
     }
 
     test flagOf {
