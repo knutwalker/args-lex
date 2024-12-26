@@ -154,6 +154,12 @@ pub const Arg = union(enum) {
     pub const ArgValue = union(Kind) {
         long: ?[:0]const u8,
         short: ?[:0]const u8,
+
+        pub fn value(self: ArgValue) ?[:0]const u8 {
+            return switch (self) {
+                .long, .short => |v| v,
+            };
+        }
     };
 
     /// Returns the value represented by the given `flags`, or null if it doesn't match those.
@@ -334,6 +340,7 @@ pub const Arg = union(enum) {
 
         var short_arg = Arg{ .shorts = .{ .flags = "v=foo" } };
         try expectStr("foo", short_arg.valueOf(.{ 'v', "value" }).?.short.?);
+        try expectStr("foo", short_arg.valueOf(.{ 'v', "value" }).?.value().?);
         try expect(null, short_arg.valueOf(.{ 'h', "help" }));
 
         var short_arg_no_equal = Arg{ .shorts = .{ .flags = "vfoo" } };
@@ -344,6 +351,7 @@ pub const Arg = union(enum) {
 
         var long_arg = Arg{ .long = .{ .flag = "value", .value = "foo" } };
         try expect("foo", long_arg.valueOf(.{ 'v', "value" }).?.long.?);
+        try expect("foo", long_arg.valueOf(.{ 'v', "value" }).?.value().?);
         try expect(null, long_arg.valueOf(.{ 'h', "help" }));
 
         var long_arg_no_value = Arg{ .long = .{ .flag = "value", .value = null } };
