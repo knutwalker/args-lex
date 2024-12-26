@@ -20,7 +20,7 @@ jobs:
       - name: Setup Zig
         uses: mlugg/setup-zig@v1
         with:
-          version: latest
+          version: 0.13.0
           use-cache: false
       - name: Run check
         run: zig build check
@@ -37,7 +37,7 @@ jobs:
       max-parallel: 1
       matrix:
         os: [ubuntu-latest]
-        zig: [latest]
+        zig: [0.13.0]
         optimize: [Debug]
     runs-on: ${{ matrix.os }}
     steps:
