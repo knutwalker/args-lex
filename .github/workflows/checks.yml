@@ -4,11 +4,14 @@ on:
   push:
     branches:
       - main
-  merge_group:
   pull_request:
     branches:
       - main
+  merge_group:
   workflow_dispatch:
+
+env:
+  ZIG_VERSION: 0.13.0
 
 jobs:
   check:
@@ -20,7 +23,7 @@ jobs:
       - name: Setup Zig
         uses: mlugg/setup-zig@v1
         with:
-          version: 0.13.0
+          version: ${{ env.ZIG_VERSION }}
           use-cache: false
       - name: Run check
         run: zig build check
@@ -30,25 +33,7 @@ jobs:
         run: |
           zig build readme
           git diff --exit-code -- README.md
-
-  unit-tests:
-    name: Run unit tests
-    strategy:
-      max-parallel: 1
-      matrix:
-        os: [ubuntu-latest]
-        zig: [0.13.0]
-        optimize: [Debug]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Setup Zig
-        uses: mlugg/setup-zig@v1
-        with:
-          version: ${{ matrix.zig }}
-          use-cache: false
-      - name: Run tests
-        run: zig build test -Doptimize=${{ matrix.optimize }}
+      - name: Run unit tests
+        run: zig build test
       - name: Run example tests
-        run: zig build example -Doptimize=${{ matrix.optimize }}
+        run: zig build example
