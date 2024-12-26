@@ -102,6 +102,15 @@ pub const Arg = union(enum) {
         }
     };
 
+    /// Tests if this arg represents a boolean flag without a value.
+    ///
+    /// The provided `flags` is a tuple of either short flag chars or
+    /// long flag strings, both *without* their leading `-`
+    /// ,e.g. `.{ "help", 'h' }`
+    pub fn hasFlag(self: *const Arg, flags: anytype) bool {
+        return self.flagOf(flags) catch .long != null;
+    }
+
     pub const Kind = enum {
         long,
         short,
@@ -110,11 +119,13 @@ pub const Arg = union(enum) {
     pub const FlagError = error{UnexpectedValueForFlag};
 
     /// Tests if this arg represents a boolean flag.
+    /// Returns the kind of flag that has matched (long or short).
+    /// If a value is provided to a long flag, an error is returned.
+    ///
     /// The provided `flags` is a tuple of either short flag chars or
     /// long flag strings, both *without* their leading `-`
     /// ,e.g. `.{ "help", 'h' }`
-    /// If a value is provided to a long flag, an error is returned.
-    pub fn isFlag(self: *const Arg, flags: anytype) FlagError!?Kind {
+    pub fn flagOf(self: *const Arg, flags: anytype) FlagError!?Kind {
         validateFlags(flags);
 
         switch (self.*) {
@@ -146,6 +157,7 @@ pub const Arg = union(enum) {
     };
 
     /// Returns the value represented by the given `flags`, or null if it doesn't match those.
+    ///
     /// The provided `flags` is a tuple of either short flag chars or
     /// long flag strings, both *without* their leading `-`
     /// ,e.g. `.{ "help", 'h' }`
@@ -272,26 +284,48 @@ pub const Arg = union(enum) {
         try t.expect(invalid_utf8_flag.next() == null);
     }
 
-    test isFlag {
+    test hasFlag {
         const expect = std.testing.expectEqual;
 
         var short_arg = Arg{ .shorts = .{ .flags = "help" } };
-        try expect(.short, try short_arg.isFlag(.{ 'h', "help" }));
-        try expect(null, try short_arg.isFlag(.{ 'v', "value" }));
+        try expect(true, short_arg.hasFlag(.{ 'h', "help" }));
+        try expect(false, short_arg.hasFlag(.{ 'v', "value" }));
 
         var long_arg = Arg{ .long = .{ .flag = "help", .value = null } };
-        try expect(.long, try long_arg.isFlag(.{ 'h', "help" }));
-        try expect(null, try long_arg.isFlag(.{ 'v', "value" }));
+        try expect(true, long_arg.hasFlag(.{ 'h', "help" }));
+        try expect(false, long_arg.hasFlag(.{ 'v', "value" }));
 
         var long_arg_with_value = Arg{ .long = .{ .flag = "help", .value = "foo" } };
-        try std.testing.expectError(error.UnexpectedValueForFlag, long_arg_with_value.isFlag(.{ 'h', "help" }));
+        try expect(false, long_arg_with_value.hasFlag(.{ 'v', "value" }));
 
         // runtime values
         var short_flag: u8 = 'h';
         var long_flag: []const u8 = "help";
         _ = .{ &short_flag, &long_flag };
-        try expect(.short, try short_arg.isFlag(.{ short_flag, long_flag }));
-        try expect(.long, try long_arg.isFlag(.{ short_flag, long_flag }));
+        try expect(true, short_arg.hasFlag(.{ short_flag, long_flag }));
+        try expect(true, long_arg.hasFlag(.{ short_flag, long_flag }));
+    }
+
+    test flagOf {
+        const expect = std.testing.expectEqual;
+
+        var short_arg = Arg{ .shorts = .{ .flags = "help" } };
+        try expect(.short, try short_arg.flagOf(.{ 'h', "help" }));
+        try expect(null, try short_arg.flagOf(.{ 'v', "value" }));
+
+        var long_arg = Arg{ .long = .{ .flag = "help", .value = null } };
+        try expect(.long, try long_arg.flagOf(.{ 'h', "help" }));
+        try expect(null, try long_arg.flagOf(.{ 'v', "value" }));
+
+        var long_arg_with_value = Arg{ .long = .{ .flag = "help", .value = "foo" } };
+        try std.testing.expectError(error.UnexpectedValueForFlag, long_arg_with_value.flagOf(.{ 'h', "help" }));
+
+        // runtime values
+        var short_flag: u8 = 'h';
+        var long_flag: []const u8 = "help";
+        _ = .{ &short_flag, &long_flag };
+        try expect(.short, try short_arg.flagOf(.{ short_flag, long_flag }));
+        try expect(.long, try long_arg.flagOf(.{ short_flag, long_flag }));
     }
 
     test valueOf {
