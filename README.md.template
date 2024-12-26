@@ -2,7 +2,7 @@
 
 # {[name]s} [![CI Status][ci-badge]][ci-url] ![License: MIT][license-badge]
 
-[ci-badge]: {[repo]s}/actions/workflows/checks.yml/badge.svg
+[ci-badge]: {[repo]s}/actions/workflows/ci.yml/badge.svg
 [ci-url]: {[repo]s}
 [license-badge]: https://img.shields.io/badge/license-MIT-blue.svg?style=shield
 
