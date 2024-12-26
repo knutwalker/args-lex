@@ -144,7 +144,7 @@ pub const Arg = union(enum) {
         var invalid_utf8_flag = Shorts{ .flags = "abc\xFFdef" };
         try t.expectEqual('a', invalid_utf8_flag.nextFlag().?);
         try t.expectEqual('b', invalid_utf8_flag.nextFlag().?);
-        try t.expectEqual('s', invalid_utf8_flag.nextFlag().?);
+        try t.expectEqual('c', invalid_utf8_flag.nextFlag().?);
         try t.expectEqual(null, invalid_utf8_flag.nextFlag());
         try t.expect(invalid_utf8_flag.next() == null);
     }
