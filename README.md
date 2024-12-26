@@ -2,7 +2,7 @@
 
 # args-lex [![CI Status][ci-badge]][ci-url] ![License: MIT][license-badge]
 
-[ci-badge]: https://github.com/knutwalker/args-lex/actions/workflows/checks.yml/badge.svg
+[ci-badge]: https://github.com/knutwalker/args-lex/actions/workflows/ci.yml/badge.svg
 [ci-url]: https://github.com/knutwalker/args-lex
 [license-badge]: https://img.shields.io/badge/license-MIT-blue.svg?style=shield
 
