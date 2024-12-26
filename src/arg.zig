@@ -60,10 +60,16 @@ pub const Arg = union(enum) {
             }
         }
 
+        /// Returns the remaining shortflags as a single value
+        /// without consuming those values
+        pub fn peekValue(self: *const Shorts) [:0]const u8 {
+            return if (std.mem.startsWith(u8, self.flags, "=")) self.flags[1..] else self.flags;
+        }
+
         /// Returns all remaining short flags as a single value
         pub fn value(self: *Shorts) [:0]const u8 {
             defer self.flags = "";
-            return if (std.mem.startsWith(u8, self.flags, "=")) self.flags[1..] else self.flags;
+            return self.peekValue();
         }
 
         /// Check if the remaining flags look like a number (integer or float).
@@ -133,11 +139,13 @@ pub const Arg = union(enum) {
 
         var with_value = Shorts{ .flags = "j12" };
         try t.expectEqual('j', with_value.next().?.flag);
+        try t.expectEqualStrings("12", with_value.peekValue());
         try t.expectEqualStrings("12", with_value.value());
         try t.expect(with_value.next() == null);
 
         var value_with_equals = Shorts{ .flags = "j=12" };
         try t.expectEqual('j', value_with_equals.next().?.flag);
+        try t.expectEqualStrings("12", value_with_equals.peekValue());
         try t.expectEqualStrings("12", value_with_equals.value());
         try t.expect(value_with_equals.next() == null);
 
