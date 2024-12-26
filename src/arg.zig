@@ -102,6 +102,121 @@ pub const Arg = union(enum) {
         }
     };
 
+    pub const Kind = enum {
+        long,
+        short,
+    };
+
+    pub const FlagError = error{UnexpectedValueForFlag};
+
+    /// Tests if this arg represents a boolean flag.
+    /// The provided `flags` is a tuple of either short flag chars or
+    /// long flag strings, both *without* their leading `-`
+    /// ,e.g. `.{ "help", 'h' }`
+    /// If a value is provided to a long flag, an error is returned.
+    pub fn isFlag(self: *const Arg, flags: anytype) FlagError!?Kind {
+        validateFlags(flags);
+
+        switch (self.*) {
+            .shorts => |shorts| {
+                var sh = shorts;
+                while (sh.nextFlag()) |s| {
+                    inline for (flags) |f| if (@typeInfo(@TypeOf(f)) != .Pointer) {
+                        if (s == f) return .short;
+                    };
+                }
+            },
+            .long => |long| {
+                inline for (flags) |f| if (@typeInfo(@TypeOf(f)) == .Pointer) {
+                    if (std.mem.eql(u8, long.flag, f)) {
+                        if (long.value != null) return FlagError.UnexpectedValueForFlag;
+                        return .long;
+                    }
+                };
+            },
+            else => {},
+        }
+
+        return null;
+    }
+
+    pub const ArgValue = union(Kind) {
+        long: ?[:0]const u8,
+        short: ?[:0]const u8,
+    };
+
+    /// Returns the value represented by the given `flags`, or null if it doesn't match those.
+    /// The provided `flags` is a tuple of either short flag chars or
+    /// long flag strings, both *without* their leading `-`
+    /// ,e.g. `.{ "help", 'h' }`
+    pub fn valueOf(self: *const Arg, flags: anytype) ?ArgValue {
+        validateFlags(flags);
+
+        switch (self.*) {
+            .shorts => |shorts| {
+                var sh = shorts;
+                while (sh.nextFlag()) |s| {
+                    inline for (flags) |f| if (@typeInfo(@TypeOf(f)) != .Pointer) {
+                        if (s == f) {
+                            const val = sh.value();
+                            const value = if (val.len > 0) val else null;
+                            return .{ .short = value };
+                        }
+                    };
+                }
+            },
+            .long => |long| {
+                inline for (flags) |f| if (@typeInfo(@TypeOf(f)) == .Pointer) {
+                    if (std.mem.eql(u8, long.flag, f)) return .{ .long = long.value };
+                };
+            },
+            else => {},
+        }
+
+        return null;
+    }
+
+    fn validateFlags(flags: anytype) void {
+        const flags_ti = @typeInfo(@TypeOf(flags));
+        if (flags_ti != .Struct or flags_ti.Struct.is_tuple == false) {
+            @compileError(std.fmt.comptimePrint(
+                "Expected `flags` to be a tuple, but it is `{s}`.",
+                .{@typeName(@TypeOf(flags))},
+            ));
+        }
+
+        inline for (flags, 0..) |f, i| {
+            switch (@typeInfo(@TypeOf(f))) {
+                .Pointer => |p| {
+                    if (p.size == .Slice and p.child == u8) continue;
+                    if (p.size == .One) {
+                        const pointee = @typeInfo(p.child);
+                        if (pointee == .Array and pointee.Array.child == u8) continue;
+                    }
+                    @compileError(std.fmt.comptimePrint(
+                        "Expected field `{}` to be a `str`/`[]const u8`, but it is `{s}`.",
+                        .{ i, @typeName(@TypeOf(f)) },
+                    ));
+                },
+                .ComptimeInt => {},
+                .Int => |int| {
+                    if (int.signedness != .unsigned or int.bits > 21) {
+                        @compileError(std.fmt.comptimePrint(
+                            "Expected field `{}` to be a `u21` coercible int, but it is `{s}`.",
+                            .{ i, @typeName(@TypeOf(f)) },
+                        ));
+                    }
+                },
+                else => {
+                    @compileError(std.fmt.comptimePrint(
+                        "Expected field `{}` to be a `char`/`u21` or a `[]const u8`, but it is `{s}`.",
+                        .{ i, @typeName(@TypeOf(f)) },
+                    ));
+                },
+            }
+        }
+    }
+
     test Shorts {
         const t = std.testing;
 
@@ -155,6 +270,57 @@ pub const Arg = union(enum) {
         try t.expectEqual('c', invalid_utf8_flag.nextFlag().?);
         try t.expectEqual(null, invalid_utf8_flag.nextFlag());
         try t.expect(invalid_utf8_flag.next() == null);
+    }
+
+    test isFlag {
+        const expect = std.testing.expectEqual;
+
+        var short_arg = Arg{ .shorts = .{ .flags = "help" } };
+        try expect(.short, try short_arg.isFlag(.{ 'h', "help" }));
+        try expect(null, try short_arg.isFlag(.{ 'v', "value" }));
+
+        var long_arg = Arg{ .long = .{ .flag = "help", .value = null } };
+        try expect(.long, try long_arg.isFlag(.{ 'h', "help" }));
+        try expect(null, try long_arg.isFlag(.{ 'v', "value" }));
+
+        var long_arg_with_value = Arg{ .long = .{ .flag = "help", .value = "foo" } };
+        try std.testing.expectError(error.UnexpectedValueForFlag, long_arg_with_value.isFlag(.{ 'h', "help" }));
+
+        // runtime values
+        var short_flag: u8 = 'h';
+        var long_flag: []const u8 = "help";
+        _ = .{ &short_flag, &long_flag };
+        try expect(.short, try short_arg.isFlag(.{ short_flag, long_flag }));
+        try expect(.long, try long_arg.isFlag(.{ short_flag, long_flag }));
+    }
+
+    test valueOf {
+        const expect = std.testing.expectEqual;
+        const expectStr = std.testing.expectEqualStrings;
+
+        var short_arg = Arg{ .shorts = .{ .flags = "v=foo" } };
+        try expectStr("foo", short_arg.valueOf(.{ 'v', "value" }).?.short.?);
+        try expect(null, short_arg.valueOf(.{ 'h', "help" }));
+
+        var short_arg_no_equal = Arg{ .shorts = .{ .flags = "vfoo" } };
+        try expectStr("foo", short_arg_no_equal.valueOf(.{ 'v', "value" }).?.short.?);
+
+        var short_arg_no_value = Arg{ .shorts = .{ .flags = "v" } };
+        try expect(null, short_arg_no_value.valueOf(.{ 'v', "value" }).?.short);
+
+        var long_arg = Arg{ .long = .{ .flag = "value", .value = "foo" } };
+        try expect("foo", long_arg.valueOf(.{ 'v', "value" }).?.long.?);
+        try expect(null, long_arg.valueOf(.{ 'h', "help" }));
+
+        var long_arg_no_value = Arg{ .long = .{ .flag = "value", .value = null } };
+        try expect(null, long_arg_no_value.valueOf(.{ 'v', "value" }).?.long);
+
+        // runtime values
+        var short_flag: u8 = 'v';
+        var long_flag: []const u8 = "value";
+        _ = .{ &short_flag, &long_flag };
+        try expectStr("foo", short_arg.valueOf(.{ short_flag, long_flag }).?.short.?);
+        try expectStr("foo", long_arg.valueOf(.{ short_flag, long_flag }).?.long.?);
     }
 };
 
