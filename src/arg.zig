@@ -109,7 +109,7 @@ pub const Arg = union(enum) {
     /// long flag strings, both *without* their leading `-`
     /// ,e.g. `.{ "help", 'h' }`
     pub fn isFlag(self: *const Arg, flags: anytype) bool {
-        return self.flagOf(flags) catch .long != null;
+        return (self.parse(bool, flags, null) catch false) orelse false;
     }
 
     pub const Kind = enum {
@@ -459,6 +459,7 @@ pub const Arg = union(enum) {
         try expect(false, long_arg.isFlag(.{ 'v', "value" }));
 
         const long_arg_with_value = Arg{ .long = .{ .flag = "help", .value = "foo" } };
+        try expect(false, long_arg_with_value.isFlag(.{ 'h', "help" }));
         try expect(false, long_arg_with_value.isFlag(.{ 'v', "value" }));
 
         // runtime values
