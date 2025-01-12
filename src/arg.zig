@@ -239,9 +239,11 @@ pub const Arg = union(enum) {
         }
     }
 
-    test Shorts {
-        const t = std.testing;
+    const t = std.testing;
+    const expect = t.expectEqual;
+    const expectStr = t.expectEqualStrings;
 
+    test Shorts {
         var shorts = Shorts{ .flags = "abc" };
         try t.expectEqual('a', shorts.next().?.flag);
         try t.expectEqual('b', shorts.next().?.flag);
@@ -295,17 +297,15 @@ pub const Arg = union(enum) {
     }
 
     test isFlag {
-        const expect = std.testing.expectEqual;
-
-        var short_arg = Arg{ .shorts = .{ .flags = "help" } };
+        const short_arg = Arg{ .shorts = .{ .flags = "help" } };
         try expect(true, short_arg.isFlag(.{ 'h', "help" }));
         try expect(false, short_arg.isFlag(.{ 'v', "value" }));
 
-        var long_arg = Arg{ .long = .{ .flag = "help", .value = null } };
+        const long_arg = Arg{ .long = .{ .flag = "help", .value = null } };
         try expect(true, long_arg.isFlag(.{ 'h', "help" }));
         try expect(false, long_arg.isFlag(.{ 'v', "value" }));
 
-        var long_arg_with_value = Arg{ .long = .{ .flag = "help", .value = "foo" } };
+        const long_arg_with_value = Arg{ .long = .{ .flag = "help", .value = "foo" } };
         try expect(false, long_arg_with_value.isFlag(.{ 'v', "value" }));
 
         // runtime values
@@ -317,17 +317,15 @@ pub const Arg = union(enum) {
     }
 
     test flagOf {
-        const expect = std.testing.expectEqual;
-
-        var short_arg = Arg{ .shorts = .{ .flags = "help" } };
+        const short_arg = Arg{ .shorts = .{ .flags = "help" } };
         try expect(.short, try short_arg.flagOf(.{ 'h', "help" }));
         try expect(null, try short_arg.flagOf(.{ 'v', "value" }));
 
-        var long_arg = Arg{ .long = .{ .flag = "help", .value = null } };
+        const long_arg = Arg{ .long = .{ .flag = "help", .value = null } };
         try expect(.long, try long_arg.flagOf(.{ 'h', "help" }));
         try expect(null, try long_arg.flagOf(.{ 'v', "value" }));
 
-        var long_arg_with_value = Arg{ .long = .{ .flag = "help", .value = "foo" } };
+        const long_arg_with_value = Arg{ .long = .{ .flag = "help", .value = "foo" } };
         try std.testing.expectError(error.UnexpectedValueForFlag, long_arg_with_value.flagOf(.{ 'h', "help" }));
 
         // runtime values
@@ -339,26 +337,23 @@ pub const Arg = union(enum) {
     }
 
     test valueOf {
-        const expect = std.testing.expectEqual;
-        const expectStr = std.testing.expectEqualStrings;
-
-        var short_arg = Arg{ .shorts = .{ .flags = "v=foo" } };
+        const short_arg = Arg{ .shorts = .{ .flags = "v=foo" } };
         try expectStr("foo", short_arg.valueOf(.{ 'v', "value" }).?.short.?);
         try expectStr("foo", short_arg.valueOf(.{ 'v', "value" }).?.value().?);
         try expect(null, short_arg.valueOf(.{ 'h', "help" }));
 
-        var short_arg_no_equal = Arg{ .shorts = .{ .flags = "vfoo" } };
+        const short_arg_no_equal = Arg{ .shorts = .{ .flags = "vfoo" } };
         try expectStr("foo", short_arg_no_equal.valueOf(.{ 'v', "value" }).?.short.?);
 
-        var short_arg_no_value = Arg{ .shorts = .{ .flags = "v" } };
+        const short_arg_no_value = Arg{ .shorts = .{ .flags = "v" } };
         try expect(null, short_arg_no_value.valueOf(.{ 'v', "value" }).?.short);
 
-        var long_arg = Arg{ .long = .{ .flag = "value", .value = "foo" } };
+        const long_arg = Arg{ .long = .{ .flag = "value", .value = "foo" } };
         try expect("foo", long_arg.valueOf(.{ 'v', "value" }).?.long.?);
         try expect("foo", long_arg.valueOf(.{ 'v', "value" }).?.value().?);
         try expect(null, long_arg.valueOf(.{ 'h', "help" }));
 
-        var long_arg_no_value = Arg{ .long = .{ .flag = "value", .value = null } };
+        const long_arg_no_value = Arg{ .long = .{ .flag = "value", .value = null } };
         try expect(null, long_arg_no_value.valueOf(.{ 'v', "value" }).?.long);
 
         // runtime values
