@@ -203,6 +203,8 @@ pub const Arg = union(enum) {
         MissingRequiredValue,
         /// A value cannot be parsed into an enum tag
         InvalidEnumTag,
+        /// A value cannot be parsed into the target type
+        InvalidValue,
     } || FlagError || std.fmt.ParseIntError || std.fmt.ParseFloatError;
 
     /// Parsed the value represented by the given `flags` into the return type.
@@ -299,7 +301,10 @@ pub const Arg = union(enum) {
                     const value = shortArgValue(sh, args) orelse return ParseError.MissingRequiredValue;
                     return std.meta.stringToEnum(R, value) orelse ParseError.InvalidEnumTag;
                 },
-                else => @compileError("Unsupported result type of parse: " ++ @typeName(R)),
+                else => {
+                    const value = shortArgValue(sh, args) orelse return ParseError.MissingRequiredValue;
+                    return parseCustom(R, value);
+                },
             },
         }
     }
@@ -339,7 +344,10 @@ pub const Arg = union(enum) {
                     const value = long.value orelse return ParseError.MissingRequiredValue;
                     return std.meta.stringToEnum(R, value) orelse ParseError.InvalidEnumTag;
                 },
-                else => @compileError("Unsupported result type of parse: " ++ @typeName(R)),
+                else => {
+                    const value = long.value orelse return ParseError.MissingRequiredValue;
+                    return parseCustom(R, value);
+                },
             },
         }
     }
@@ -348,6 +356,25 @@ pub const Arg = union(enum) {
         switch (@typeInfo(@TypeOf(args))) {
             .Void, .Null => return null,
             else => return args.nextValue(),
+        }
+    }
+
+    fn parseCustom(R: type, value: [:0]const u8) ParseError!R {
+        if (@hasDecl(R, "parse")) {
+            switch (@TypeOf(R.parse)) {
+                fn ([]const u8) ParseError!R,
+                fn ([:0]const u8) ParseError!R,
+                fn ([]const u8) R,
+                fn ([:0]const u8) R,
+                => {
+                    return R.parse(value);
+                },
+                else => {
+                    @compileError("Unsupported parse function for type: " ++ @typeName(R));
+                },
+            }
+        } else {
+            @compileError("Unsupported result type of parse: " ++ @typeName(R));
         }
     }
 
@@ -712,6 +739,30 @@ pub const Arg = union(enum) {
 
         const invalid_number_long_arg = Arg{ .long = .{ .flag = "a", .value = "42.42x" } };
         try t.expectError(ParseError.InvalidCharacter, invalid_number_long_arg.parse(f16, .{"a"}, null).?);
+    }
+
+    test "parse into custom type" {
+        const Custom = struct {
+            a: i32,
+            b: B,
+
+            const B = enum { x, y };
+
+            pub fn parse(value: []const u8) ParseError!@This() {
+                var splits = std.mem.splitScalar(u8, value, ',');
+                const a_value = splits.next() orelse return ParseError.InvalidValue;
+                const a = try std.fmt.parseInt(i32, a_value, 10);
+                const b_value = splits.next() orelse return ParseError.InvalidValue;
+                const b = std.meta.stringToEnum(B, b_value) orelse return ParseError.InvalidEnumTag;
+                return .{ .a = a, .b = b };
+            }
+        };
+
+        const short_arg = Arg{ .shorts = .{ .flags = "a42,x" } };
+        try t.expectEqualDeep(Custom{ .a = 42, .b = .x }, try short_arg.parse(Custom, .{'a'}, null).?);
+
+        const long_arg = Arg{ .long = .{ .flag = "a", .value = "42,x" } };
+        try t.expectEqualDeep(Custom{ .a = 42, .b = .x }, try long_arg.parse(Custom, .{"a"}, null).?);
     }
 };
 
