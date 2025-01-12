@@ -198,6 +198,159 @@ pub const Arg = union(enum) {
         return null;
     }
 
+    pub const ParseError = error{
+        /// A flag requires a value but none where provided
+        MissingRequiredValue,
+        /// A value cannot be parsed into an enum tag
+        InvalidEnumTag,
+    } || FlagError || std.fmt.ParseIntError || std.fmt.ParseFloatError;
+
+    /// Parsed the value represented by the given `flags` into the return type.
+    /// The type determines how the flag is parsed.
+    ///
+    /// The following values are supported, together with how they influence the parsing:
+    ///
+    /// |type          | value       | parsing                             |
+    /// |--------------|-------------|-------------------------------------|
+    /// |`bool`        | not allowed | checks for existence                |
+    /// |`usize`       | not allowed | count occurences                    |
+    /// |`u*` int      | required    | parse value as unsigned number      |
+    /// |`i*` int      | required    | parse value as signed number        |
+    /// |`f*` float    | required    | parse value as float                |
+    /// |`[]const u8`  | required    | take value                          |
+    /// |`[:0]const u8`| required    | take value                          |
+    /// |`enum`        | required    | parse value as enum tag name        |
+    /// |`?*`          | optional    | don't require value for inner type  |
+    ///
+    /// Since this method is only parsing a single value, there is no option
+    /// to parse multiple values. To allow multiple values separated by some
+    /// delimiter, parse as `[]const u8` and do the parsing on your side.
+    ///
+    /// If the argument itself does not provide a value, but the type requires one,
+    /// `args.nextValue()` is called on the provided `args`, expecting it to return
+    /// a `[:0]const u8`, which should be the outer args iterator.
+    /// This value can also be `{}` (void) or `null` if
+    ///
+    /// Any type that requires a value can be wrapped in an optional (`?`) to
+    /// not require the value. This can be used to differentiate between a
+    /// flag that is missing and a flag that is missing a value.
+    ///
+    /// The provided `flags` is a tuple of either short flag chars or
+    /// long flag strings, both *without* their leading `-`
+    /// ,e.g. `.{ "help", 'h' }`
+    pub fn parse(self: *const Arg, R: type, flags: anytype, args: anytype) ParseError!?R {
+        validateFlags(flags);
+
+        switch (self.*) {
+            .shorts => |shorts| {
+                var sh = shorts;
+                while (sh.nextFlag()) |s| {
+                    inline for (flags) |f| if (@typeInfo(@TypeOf(f)) != .Pointer) {
+                        if (s == f) {
+                            return try parseShortArg(R, &sh, f, args);
+                        }
+                    };
+                }
+            },
+            .long => |long| {
+                inline for (flags) |f| if (@typeInfo(@TypeOf(f)) == .Pointer) {
+                    if (std.mem.eql(u8, long.flag, f)) {
+                        return try parseLongArg(R, long, args);
+                    }
+                };
+            },
+            else => {},
+        }
+
+        return switch (R) {
+            bool => false,
+            usize => 0,
+            else => null,
+        };
+    }
+
+    fn parseShortArg(R: type, sh: *Shorts, flag: u21, args: anytype) ParseError!R {
+        switch (R) {
+            bool, ?bool => return true,
+            usize, ?usize => {
+                var result: usize = 1;
+                while (sh.nextFlag()) |s| result += @intFromBool(s == flag);
+                return result;
+            },
+            []const u8, [:0]const u8 => {
+                return shortArgValue(sh, args) orelse ParseError.MissingRequiredValue;
+            },
+            else => switch (@typeInfo(R)) {
+                .Int => {
+                    const value = shortArgValue(sh, args) orelse return ParseError.MissingRequiredValue;
+                    return std.fmt.parseInt(R, value, 0);
+                },
+                .Float => {
+                    const value = shortArgValue(sh, args) orelse return ParseError.MissingRequiredValue;
+                    return std.fmt.parseFloat(R, value);
+                },
+                .Optional => |o| {
+                    return parseShortArg(o.child, sh, flag, args) catch |err| switch (err) {
+                        ParseError.MissingRequiredValue => null,
+                        else => err,
+                    };
+                },
+                .Enum => {
+                    const value = shortArgValue(sh, args) orelse return ParseError.MissingRequiredValue;
+                    return std.meta.stringToEnum(R, value) orelse ParseError.InvalidEnumTag;
+                },
+                else => @compileError("Unsupported result type of parse: " ++ @typeName(R)),
+            },
+        }
+    }
+
+    fn shortArgValue(sh: *Shorts, args: anytype) ?[:0]const u8 {
+        const val = sh.value();
+        return if (val.len > 0) val else nextValue(args);
+    }
+
+    fn parseLongArg(R: type, long: Long, args: anytype) ParseError!R {
+        switch (R) {
+            bool, ?bool => {
+                return if (long.value) |_| ParseError.UnexpectedValueForFlag else true;
+            },
+            usize, ?usize => {
+                return if (long.value) |_| ParseError.UnexpectedValueForFlag else 1;
+            },
+            []const u8, [:0]const u8 => {
+                return (long.value orelse nextValue(args)) orelse ParseError.MissingRequiredValue;
+            },
+            else => switch (@typeInfo(R)) {
+                .Int => {
+                    const value = long.value orelse return ParseError.MissingRequiredValue;
+                    return std.fmt.parseInt(R, value, 0);
+                },
+                .Float => {
+                    const value = long.value orelse return ParseError.MissingRequiredValue;
+                    return std.fmt.parseFloat(R, value);
+                },
+                .Optional => |o| {
+                    return parseLongArg(o.child, long, args) catch |err| switch (err) {
+                        ParseError.MissingRequiredValue => null,
+                        else => err,
+                    };
+                },
+                .Enum => {
+                    const value = long.value orelse return ParseError.MissingRequiredValue;
+                    return std.meta.stringToEnum(R, value) orelse ParseError.InvalidEnumTag;
+                },
+                else => @compileError("Unsupported result type of parse: " ++ @typeName(R)),
+            },
+        }
+    }
+
+    fn nextValue(args: anytype) ?[:0]const u8 {
+        switch (@typeInfo(@TypeOf(args))) {
+            .Void, .Null => return null,
+            else => return args.nextValue(),
+        }
+    }
+
     fn validateFlags(flags: anytype) void {
         const flags_ti = @typeInfo(@TypeOf(flags));
         if (flags_ti != .Struct or flags_ti.Struct.is_tuple == false) {
@@ -362,6 +515,202 @@ pub const Arg = union(enum) {
         _ = .{ &short_flag, &long_flag };
         try expectStr("foo", short_arg.valueOf(.{ short_flag, long_flag }).?.short.?);
         try expectStr("foo", long_arg.valueOf(.{ short_flag, long_flag }).?.long.?);
+    }
+
+    test parse {
+        const color = enum { auto, always, never };
+
+        // parse a color flag with the following rules
+        //  ``  (no flag provided) : color=auto
+        //  `--color`              : color=always
+        //  `--color=<value>`      : color=<value>
+        const parse_color = struct {
+            fn f(arg: Arg) color {
+                const color_flag = arg.parse(?color, .{ 'c', "color" }, null) catch unreachable;
+                return (color_flag orelse .auto) orelse .always;
+            }
+        }.f;
+
+        try std.testing.expectEqual(
+            .auto,
+            parse_color(Arg{ .long = .{ .flag = "not-color", .value = null } }),
+        );
+
+        try std.testing.expectEqual(
+            .always,
+            parse_color(Arg{ .long = .{ .flag = "color", .value = null } }),
+        );
+
+        try std.testing.expectEqual(
+            .never,
+            parse_color(Arg{ .long = .{ .flag = "color", .value = "never" } }),
+        );
+
+        try std.testing.expectEqual(
+            .auto,
+            parse_color(Arg{ .long = .{ .flag = "color", .value = "auto" } }),
+        );
+
+        try std.testing.expectEqual(
+            .always,
+            parse_color(Arg{ .long = .{ .flag = "color", .value = "always" } }),
+        );
+    }
+
+    test "parse into bool" {
+        const short_arg = Arg{ .shorts = .{ .flags = "abbbc=de" } };
+
+        try expect(true, short_arg.parse(bool, .{'a'}, null));
+        try expect(false, short_arg.parse(bool, .{'x'}, null));
+
+        const long_arg = Arg{ .long = .{ .flag = "a", .value = null } };
+
+        try expect(true, long_arg.parse(bool, .{"a"}, null));
+        try expect(false, long_arg.parse(bool, .{"x"}, null));
+    }
+
+    test "parse into usize" {
+        const short_arg = Arg{ .shorts = .{ .flags = "abbbc=de" } };
+
+        try expect(1, short_arg.parse(usize, .{'a'}, null));
+        try expect(3, short_arg.parse(usize, .{'b'}, null));
+        try expect(0, short_arg.parse(usize, .{'x'}, null));
+
+        const long_arg = Arg{ .long = .{ .flag = "a", .value = null } };
+
+        try expect(1, long_arg.parse(usize, .{"a"}, null));
+        try expect(0, long_arg.parse(usize, .{"x"}, null));
+    }
+
+    test "parse into enum" {
+        const short_arg = Arg{ .shorts = .{ .flags = "abbbc=de" } };
+        try expect(.de, short_arg.parse(enum { de, fg }, .{'c'}, null));
+        try t.expectError(ParseError.InvalidEnumTag, short_arg.parse(enum { a }, .{'c'}, null));
+
+        const long_arg = Arg{ .long = .{ .flag = "b", .value = "foo" } };
+        try expect(.foo, long_arg.parse(enum { foo, bar }, .{"b"}, null));
+        try t.expectError(ParseError.InvalidEnumTag, long_arg.parse(enum { a }, .{"b"}, null));
+    }
+
+    test "parse into str" {
+        const short_arg = Arg{ .shorts = .{ .flags = "abbbc=de" } };
+
+        try expectStr("de", (try short_arg.parse([]const u8, .{'c'}, null)).?);
+        try expectStr("de", (try short_arg.parse([:0]const u8, .{'c'}, null)).?);
+
+        try expect(@as(?[]const u8, null), try short_arg.parse([]const u8, .{'x'}, null));
+        try expect(@as(??[]const u8, null), try short_arg.parse(?[]const u8, .{'x'}, null));
+        try expect(@as(?[]const u8, null), (try short_arg.parse(?[]const u8, .{'e'}, null)).?);
+
+        const long_a_arg = Arg{ .long = .{ .flag = "a", .value = null } };
+        const long_b_arg = Arg{ .long = .{ .flag = "b", .value = "foo" } };
+
+        try expectStr("foo", (try long_b_arg.parse([]const u8, .{"b"}, null)).?);
+        try expectStr("foo", (try long_b_arg.parse([:0]const u8, .{"b"}, null)).?);
+
+        try expect(@as(?[]const u8, null), try long_a_arg.parse([]const u8, .{"x"}, null));
+        try expect(@as(??[]const u8, null), try long_a_arg.parse(?[]const u8, .{"x"}, null));
+        try expect(@as(?[]const u8, null), (try long_a_arg.parse(?[]const u8, .{"a"}, null)).?);
+    }
+
+    test "parse into uint" {
+        const short_arg = Arg{ .shorts = .{ .flags = "a42" } };
+        try expect(42, short_arg.parse(u8, .{'a'}, null));
+        try expect(42, short_arg.parse(u16, .{'a'}, null));
+        try expect(42, short_arg.parse(u32, .{'a'}, null));
+        try expect(42, short_arg.parse(u64, .{'a'}, null));
+
+        const invalid_number_short_arg = Arg{ .shorts = .{ .flags = "a42x" } };
+        try t.expectError(ParseError.InvalidCharacter, invalid_number_short_arg.parse(u8, .{'a'}, null));
+
+        const overflow_short_arg = Arg{ .shorts = .{ .flags = "a1337" } };
+        try t.expectError(ParseError.Overflow, overflow_short_arg.parse(u8, .{'a'}, null));
+
+        const long_arg = Arg{ .long = .{ .flag = "a", .value = "42" } };
+        try expect(42, long_arg.parse(u8, .{"a"}, null));
+        try expect(42, long_arg.parse(u16, .{"a"}, null));
+        try expect(42, long_arg.parse(u32, .{"a"}, null));
+        try expect(42, long_arg.parse(u64, .{"a"}, null));
+
+        const invalid_number_long_arg = Arg{ .long = .{ .flag = "a", .value = "42x" } };
+        try t.expectError(ParseError.InvalidCharacter, invalid_number_long_arg.parse(u8, .{"a"}, null));
+
+        const overflow_long_arg = Arg{ .long = .{ .flag = "a", .value = "1337" } };
+        try t.expectError(ParseError.Overflow, overflow_long_arg.parse(u8, .{"a"}, null));
+    }
+
+    test "parse into int" {
+        const short_arg = Arg{ .shorts = .{ .flags = "a42" } };
+        try expect(42, short_arg.parse(i8, .{'a'}, null));
+        try expect(42, short_arg.parse(i16, .{'a'}, null));
+        try expect(42, short_arg.parse(i32, .{'a'}, null));
+        try expect(42, short_arg.parse(i64, .{'a'}, null));
+        try expect(42, short_arg.parse(isize, .{'a'}, null));
+
+        const negative_short_arg = Arg{ .shorts = .{ .flags = "a-42" } };
+        try expect(-42, negative_short_arg.parse(i8, .{'a'}, null));
+        try expect(-42, negative_short_arg.parse(i16, .{'a'}, null));
+        try expect(-42, negative_short_arg.parse(i32, .{'a'}, null));
+        try expect(-42, negative_short_arg.parse(i64, .{'a'}, null));
+        try expect(-42, negative_short_arg.parse(isize, .{'a'}, null));
+
+        const invalid_number_short_arg = Arg{ .shorts = .{ .flags = "a42x" } };
+        try t.expectError(ParseError.InvalidCharacter, invalid_number_short_arg.parse(i8, .{'a'}, null));
+
+        const overflow_short_arg = Arg{ .shorts = .{ .flags = "a1337" } };
+        try t.expectError(ParseError.Overflow, overflow_short_arg.parse(i8, .{'a'}, null));
+
+        const long_arg = Arg{ .long = .{ .flag = "a", .value = "42" } };
+        try expect(42, long_arg.parse(i8, .{"a"}, null));
+        try expect(42, long_arg.parse(i16, .{"a"}, null));
+        try expect(42, long_arg.parse(i32, .{"a"}, null));
+        try expect(42, long_arg.parse(i64, .{"a"}, null));
+        try expect(42, long_arg.parse(isize, .{"a"}, null));
+
+        const negative_long_arg = Arg{ .long = .{ .flag = "a", .value = "-42" } };
+        try expect(-42, negative_long_arg.parse(i8, .{"a"}, null));
+        try expect(-42, negative_long_arg.parse(i16, .{"a"}, null));
+        try expect(-42, negative_long_arg.parse(i32, .{"a"}, null));
+        try expect(-42, negative_long_arg.parse(i64, .{"a"}, null));
+        try expect(-42, negative_long_arg.parse(isize, .{"a"}, null));
+
+        const invalid_number_long_arg = Arg{ .long = .{ .flag = "a", .value = "42x" } };
+        try t.expectError(ParseError.InvalidCharacter, invalid_number_long_arg.parse(i8, .{"a"}, null));
+
+        const overflow_long_arg = Arg{ .long = .{ .flag = "a", .value = "1337" } };
+        try t.expectError(ParseError.Overflow, overflow_long_arg.parse(i8, .{"a"}, null));
+    }
+
+    test "parse into float" {
+        const short_arg = Arg{ .shorts = .{ .flags = "a42.42" } };
+        try expect(42.42, short_arg.parse(f16, .{'a'}, null));
+        try expect(42.42, short_arg.parse(f32, .{'a'}, null));
+        try expect(42.42, short_arg.parse(f64, .{'a'}, null));
+        try expect(42.42, short_arg.parse(f128, .{'a'}, null));
+
+        const negative_short_arg = Arg{ .shorts = .{ .flags = "a-42.42" } };
+        try expect(-42.42, negative_short_arg.parse(f16, .{'a'}, null));
+        try expect(-42.42, negative_short_arg.parse(f32, .{'a'}, null));
+        try expect(-42.42, negative_short_arg.parse(f64, .{'a'}, null));
+        try expect(-42.42, negative_short_arg.parse(f128, .{'a'}, null));
+
+        const invalid_number_short_arg = Arg{ .shorts = .{ .flags = "a42.42x" } };
+        try t.expectError(ParseError.InvalidCharacter, invalid_number_short_arg.parse(f16, .{'a'}, null));
+
+        const long_arg = Arg{ .long = .{ .flag = "a", .value = "42.42" } };
+        try expect(42.42, long_arg.parse(f16, .{"a"}, null));
+        try expect(42.42, long_arg.parse(f32, .{"a"}, null));
+        try expect(42.42, long_arg.parse(f64, .{"a"}, null));
+        try expect(42.42, long_arg.parse(f128, .{"a"}, null));
+
+        const negative_long_arg = Arg{ .long = .{ .flag = "a", .value = "-42.42" } };
+        try expect(-42.42, negative_long_arg.parse(f16, .{"a"}, null));
+        try expect(-42.42, negative_long_arg.parse(f32, .{"a"}, null));
+        try expect(-42.42, negative_long_arg.parse(f64, .{"a"}, null));
+        try expect(-42.42, negative_long_arg.parse(f128, .{"a"}, null));
+
+        const invalid_number_long_arg = Arg{ .long = .{ .flag = "a", .value = "42.42x" } };
+        try t.expectError(ParseError.InvalidCharacter, invalid_number_long_arg.parse(f16, .{"a"}, null));
     }
 };
 
