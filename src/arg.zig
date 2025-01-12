@@ -103,6 +103,7 @@ pub const Arg = union(enum) {
     };
 
     /// Tests if this arg represents a boolean flag without a value.
+    /// Note that repeated flags (such as `-vv`) cannot be counted with method.
     ///
     /// The provided `flags` is a tuple of either short flag chars or
     /// long flag strings, both *without* their leading `-`
@@ -116,7 +117,10 @@ pub const Arg = union(enum) {
         short,
     };
 
-    pub const FlagError = error{UnexpectedValueForFlag};
+    pub const FlagError = error{
+        /// A value was provided for the flag but it is not allowed
+        UnexpectedValueForFlag,
+    };
 
     /// Tests if this arg represents a boolean flag.
     /// Returns the kind of flag that has matched (long or short).
