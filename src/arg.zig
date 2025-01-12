@@ -109,7 +109,7 @@ pub const Arg = union(enum) {
     /// long flag strings, both *without* their leading `-`
     /// ,e.g. `.{ "help", 'h' }`
     pub fn isFlag(self: *const Arg, flags: anytype) bool {
-        return (self.parse(bool, flags, null) catch false) orelse false;
+        return self.parse(bool, flags, null) orelse false catch false;
     }
 
     pub const Kind = enum {
@@ -238,7 +238,7 @@ pub const Arg = union(enum) {
     /// The provided `flags` is a tuple of either short flag chars or
     /// long flag strings, both *without* their leading `-`
     /// ,e.g. `.{ "help", 'h' }`
-    pub fn parse(self: *const Arg, R: type, flags: anytype, args: anytype) ParseError!?R {
+    pub fn parse(self: *const Arg, R: type, flags: anytype, args: anytype) ?(ParseError!R) {
         validateFlags(flags);
 
         switch (self.*) {
@@ -527,8 +527,8 @@ pub const Arg = union(enum) {
         //  `--color=<value>`      : color=<value>
         const parse_color = struct {
             fn f(arg: Arg) color {
-                const color_flag = arg.parse(?color, .{ 'c', "color" }, null) catch unreachable;
-                return (color_flag orelse .auto) orelse .always;
+                const color_flag = arg.parse(?color, .{ 'c', "color" }, null);
+                return ((color_flag orelse .auto) catch unreachable) orelse .always;
             }
         }.f;
 
@@ -586,32 +586,32 @@ pub const Arg = union(enum) {
     test "parse into enum" {
         const short_arg = Arg{ .shorts = .{ .flags = "abbbc=de" } };
         try expect(.de, short_arg.parse(enum { de, fg }, .{'c'}, null));
-        try t.expectError(ParseError.InvalidEnumTag, short_arg.parse(enum { a }, .{'c'}, null));
+        try t.expectError(ParseError.InvalidEnumTag, short_arg.parse(enum { a }, .{'c'}, null).?);
 
         const long_arg = Arg{ .long = .{ .flag = "b", .value = "foo" } };
         try expect(.foo, long_arg.parse(enum { foo, bar }, .{"b"}, null));
-        try t.expectError(ParseError.InvalidEnumTag, long_arg.parse(enum { a }, .{"b"}, null));
+        try t.expectError(ParseError.InvalidEnumTag, long_arg.parse(enum { a }, .{"b"}, null).?);
     }
 
     test "parse into str" {
         const short_arg = Arg{ .shorts = .{ .flags = "abbbc=de" } };
 
-        try expectStr("de", (try short_arg.parse([]const u8, .{'c'}, null)).?);
-        try expectStr("de", (try short_arg.parse([:0]const u8, .{'c'}, null)).?);
+        try expectStr("de", try short_arg.parse([]const u8, .{'c'}, null).?);
+        try expectStr("de", try short_arg.parse([:0]const u8, .{'c'}, null).?);
 
-        try expect(@as(?[]const u8, null), try short_arg.parse([]const u8, .{'x'}, null));
-        try expect(@as(??[]const u8, null), try short_arg.parse(?[]const u8, .{'x'}, null));
-        try expect(@as(?[]const u8, null), (try short_arg.parse(?[]const u8, .{'e'}, null)).?);
+        try t.expect(short_arg.parse([]const u8, .{'x'}, null) == null);
+        try t.expect(short_arg.parse(?[]const u8, .{'x'}, null) == null);
+        try expect(@as(?[]const u8, null), try short_arg.parse(?[]const u8, .{'e'}, null).?);
 
         const long_a_arg = Arg{ .long = .{ .flag = "a", .value = null } };
         const long_b_arg = Arg{ .long = .{ .flag = "b", .value = "foo" } };
 
-        try expectStr("foo", (try long_b_arg.parse([]const u8, .{"b"}, null)).?);
-        try expectStr("foo", (try long_b_arg.parse([:0]const u8, .{"b"}, null)).?);
+        try expectStr("foo", try long_b_arg.parse([]const u8, .{"b"}, null).?);
+        try expectStr("foo", try long_b_arg.parse([:0]const u8, .{"b"}, null).?);
 
-        try expect(@as(?[]const u8, null), try long_a_arg.parse([]const u8, .{"x"}, null));
-        try expect(@as(??[]const u8, null), try long_a_arg.parse(?[]const u8, .{"x"}, null));
-        try expect(@as(?[]const u8, null), (try long_a_arg.parse(?[]const u8, .{"a"}, null)).?);
+        try t.expect(long_a_arg.parse([]const u8, .{"x"}, null) == null);
+        try t.expect(long_a_arg.parse(?[]const u8, .{"x"}, null) == null);
+        try expect(@as(?[]const u8, null), try long_a_arg.parse(?[]const u8, .{"a"}, null).?);
     }
 
     test "parse into uint" {
@@ -622,10 +622,10 @@ pub const Arg = union(enum) {
         try expect(42, short_arg.parse(u64, .{'a'}, null));
 
         const invalid_number_short_arg = Arg{ .shorts = .{ .flags = "a42x" } };
-        try t.expectError(ParseError.InvalidCharacter, invalid_number_short_arg.parse(u8, .{'a'}, null));
+        try t.expectError(ParseError.InvalidCharacter, invalid_number_short_arg.parse(u8, .{'a'}, null).?);
 
         const overflow_short_arg = Arg{ .shorts = .{ .flags = "a1337" } };
-        try t.expectError(ParseError.Overflow, overflow_short_arg.parse(u8, .{'a'}, null));
+        try t.expectError(ParseError.Overflow, overflow_short_arg.parse(u8, .{'a'}, null).?);
 
         const long_arg = Arg{ .long = .{ .flag = "a", .value = "42" } };
         try expect(42, long_arg.parse(u8, .{"a"}, null));
@@ -634,10 +634,10 @@ pub const Arg = union(enum) {
         try expect(42, long_arg.parse(u64, .{"a"}, null));
 
         const invalid_number_long_arg = Arg{ .long = .{ .flag = "a", .value = "42x" } };
-        try t.expectError(ParseError.InvalidCharacter, invalid_number_long_arg.parse(u8, .{"a"}, null));
+        try t.expectError(ParseError.InvalidCharacter, invalid_number_long_arg.parse(u8, .{"a"}, null).?);
 
         const overflow_long_arg = Arg{ .long = .{ .flag = "a", .value = "1337" } };
-        try t.expectError(ParseError.Overflow, overflow_long_arg.parse(u8, .{"a"}, null));
+        try t.expectError(ParseError.Overflow, overflow_long_arg.parse(u8, .{"a"}, null).?);
     }
 
     test "parse into int" {
@@ -656,10 +656,10 @@ pub const Arg = union(enum) {
         try expect(-42, negative_short_arg.parse(isize, .{'a'}, null));
 
         const invalid_number_short_arg = Arg{ .shorts = .{ .flags = "a42x" } };
-        try t.expectError(ParseError.InvalidCharacter, invalid_number_short_arg.parse(i8, .{'a'}, null));
+        try t.expectError(ParseError.InvalidCharacter, invalid_number_short_arg.parse(i8, .{'a'}, null).?);
 
         const overflow_short_arg = Arg{ .shorts = .{ .flags = "a1337" } };
-        try t.expectError(ParseError.Overflow, overflow_short_arg.parse(i8, .{'a'}, null));
+        try t.expectError(ParseError.Overflow, overflow_short_arg.parse(i8, .{'a'}, null).?);
 
         const long_arg = Arg{ .long = .{ .flag = "a", .value = "42" } };
         try expect(42, long_arg.parse(i8, .{"a"}, null));
@@ -676,10 +676,10 @@ pub const Arg = union(enum) {
         try expect(-42, negative_long_arg.parse(isize, .{"a"}, null));
 
         const invalid_number_long_arg = Arg{ .long = .{ .flag = "a", .value = "42x" } };
-        try t.expectError(ParseError.InvalidCharacter, invalid_number_long_arg.parse(i8, .{"a"}, null));
+        try t.expectError(ParseError.InvalidCharacter, invalid_number_long_arg.parse(i8, .{"a"}, null).?);
 
         const overflow_long_arg = Arg{ .long = .{ .flag = "a", .value = "1337" } };
-        try t.expectError(ParseError.Overflow, overflow_long_arg.parse(i8, .{"a"}, null));
+        try t.expectError(ParseError.Overflow, overflow_long_arg.parse(i8, .{"a"}, null).?);
     }
 
     test "parse into float" {
@@ -696,7 +696,7 @@ pub const Arg = union(enum) {
         try expect(-42.42, negative_short_arg.parse(f128, .{'a'}, null));
 
         const invalid_number_short_arg = Arg{ .shorts = .{ .flags = "a42.42x" } };
-        try t.expectError(ParseError.InvalidCharacter, invalid_number_short_arg.parse(f16, .{'a'}, null));
+        try t.expectError(ParseError.InvalidCharacter, invalid_number_short_arg.parse(f16, .{'a'}, null).?);
 
         const long_arg = Arg{ .long = .{ .flag = "a", .value = "42.42" } };
         try expect(42.42, long_arg.parse(f16, .{"a"}, null));
@@ -711,7 +711,7 @@ pub const Arg = union(enum) {
         try expect(-42.42, negative_long_arg.parse(f128, .{"a"}, null));
 
         const invalid_number_long_arg = Arg{ .long = .{ .flag = "a", .value = "42.42x" } };
-        try t.expectError(ParseError.InvalidCharacter, invalid_number_long_arg.parse(f16, .{"a"}, null));
+        try t.expectError(ParseError.InvalidCharacter, invalid_number_long_arg.parse(f16, .{"a"}, null).?);
     }
 };
 
