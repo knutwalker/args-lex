@@ -80,8 +80,7 @@ pub const Arg = union(enum) {
         }
 
         pub fn format(self: @This(), comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-            _ = fmt;
-            _ = options;
+            _ = .{ fmt, options };
             return writer.print("Short{{ -{s} }}", .{self.flags});
         }
     };
