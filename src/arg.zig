@@ -136,13 +136,13 @@ pub const Arg = union(enum) {
             .shorts => |shorts| {
                 var sh = shorts;
                 while (sh.nextFlag()) |s| {
-                    inline for (flags) |f| if (@typeInfo(@TypeOf(f)) != .Pointer) {
+                    inline for (flags) |f| if (@typeInfo(@TypeOf(f)) != .pointer) {
                         if (s == f) return .short;
                     };
                 }
             },
             .long => |long| {
-                inline for (flags) |f| if (@typeInfo(@TypeOf(f)) == .Pointer) {
+                inline for (flags) |f| if (@typeInfo(@TypeOf(f)) == .pointer) {
                     if (std.mem.eql(u8, long.flag, f)) {
                         if (long.value != null) return FlagError.UnexpectedValueForFlag;
                         return .long;
@@ -178,7 +178,7 @@ pub const Arg = union(enum) {
             .shorts => |shorts| {
                 var sh = shorts;
                 while (sh.nextFlag()) |s| {
-                    inline for (flags) |f| if (@typeInfo(@TypeOf(f)) != .Pointer) {
+                    inline for (flags) |f| if (@typeInfo(@TypeOf(f)) != .pointer) {
                         if (s == f) {
                             const val = sh.value();
                             const value = if (val.len > 0) val else null;
@@ -188,7 +188,7 @@ pub const Arg = union(enum) {
                 }
             },
             .long => |long| {
-                inline for (flags) |f| if (@typeInfo(@TypeOf(f)) == .Pointer) {
+                inline for (flags) |f| if (@typeInfo(@TypeOf(f)) == .pointer) {
                     if (std.mem.eql(u8, long.flag, f)) return .{ .long = long.value };
                 };
             },
@@ -247,7 +247,7 @@ pub const Arg = union(enum) {
             .shorts => |shorts| {
                 var sh = shorts;
                 while (sh.nextFlag()) |s| {
-                    inline for (flags) |f| if (@typeInfo(@TypeOf(f)) != .Pointer) {
+                    inline for (flags) |f| if (@typeInfo(@TypeOf(f)) != .pointer) {
                         if (s == f) {
                             return try parseShortArg(R, &sh, f, args);
                         }
@@ -255,7 +255,7 @@ pub const Arg = union(enum) {
                 }
             },
             .long => |long| {
-                inline for (flags) |f| if (@typeInfo(@TypeOf(f)) == .Pointer) {
+                inline for (flags) |f| if (@typeInfo(@TypeOf(f)) == .pointer) {
                     if (std.mem.eql(u8, long.flag, f)) {
                         return try parseLongArg(R, long, args);
                     }
@@ -283,21 +283,21 @@ pub const Arg = union(enum) {
                 return shortArgValue(sh, args) orelse ParseError.MissingRequiredValue;
             },
             else => switch (@typeInfo(R)) {
-                .Int => {
+                .int => {
                     const value = shortArgValue(sh, args) orelse return ParseError.MissingRequiredValue;
                     return std.fmt.parseInt(R, value, 0);
                 },
-                .Float => {
+                .float => {
                     const value = shortArgValue(sh, args) orelse return ParseError.MissingRequiredValue;
                     return std.fmt.parseFloat(R, value);
                 },
-                .Optional => |o| {
+                .optional => |o| {
                     return parseShortArg(o.child, sh, flag, args) catch |err| switch (err) {
                         ParseError.MissingRequiredValue => null,
                         else => err,
                     };
                 },
-                .Enum => {
+                .@"enum" => {
                     const value = shortArgValue(sh, args) orelse return ParseError.MissingRequiredValue;
                     return std.meta.stringToEnum(R, value) orelse ParseError.InvalidEnumTag;
                 },
@@ -326,21 +326,21 @@ pub const Arg = union(enum) {
                 return (long.value orelse nextValue(args)) orelse ParseError.MissingRequiredValue;
             },
             else => switch (@typeInfo(R)) {
-                .Int => {
+                .int => {
                     const value = long.value orelse return ParseError.MissingRequiredValue;
                     return std.fmt.parseInt(R, value, 0);
                 },
-                .Float => {
+                .float => {
                     const value = long.value orelse return ParseError.MissingRequiredValue;
                     return std.fmt.parseFloat(R, value);
                 },
-                .Optional => |o| {
+                .optional => |o| {
                     return parseLongArg(o.child, long, args) catch |err| switch (err) {
                         ParseError.MissingRequiredValue => null,
                         else => err,
                     };
                 },
-                .Enum => {
+                .@"enum" => {
                     const value = long.value orelse return ParseError.MissingRequiredValue;
                     return std.meta.stringToEnum(R, value) orelse ParseError.InvalidEnumTag;
                 },
@@ -354,7 +354,7 @@ pub const Arg = union(enum) {
 
     fn nextValue(args: anytype) ?[:0]const u8 {
         switch (@typeInfo(@TypeOf(args))) {
-            .Void, .Null => return null,
+            .void, .null => return null,
             else => return args.nextValue(),
         }
     }
@@ -380,7 +380,7 @@ pub const Arg = union(enum) {
 
     fn validateFlags(flags: anytype) void {
         const flags_ti = @typeInfo(@TypeOf(flags));
-        if (flags_ti != .Struct or flags_ti.Struct.is_tuple == false) {
+        if (flags_ti != .@"struct" or flags_ti.@"struct".is_tuple == false) {
             @compileError(std.fmt.comptimePrint(
                 "Expected `flags` to be a tuple, but it is `{s}`.",
                 .{@typeName(@TypeOf(flags))},
@@ -389,19 +389,19 @@ pub const Arg = union(enum) {
 
         inline for (flags, 0..) |f, i| {
             switch (@typeInfo(@TypeOf(f))) {
-                .Pointer => |p| {
-                    if (p.size == .Slice and p.child == u8) continue;
-                    if (p.size == .One) {
+                .pointer => |p| {
+                    if (p.size == .slice and p.child == u8) continue;
+                    if (p.size == .one) {
                         const pointee = @typeInfo(p.child);
-                        if (pointee == .Array and pointee.Array.child == u8) continue;
+                        if (pointee == .array and pointee.array.child == u8) continue;
                     }
                     @compileError(std.fmt.comptimePrint(
                         "Expected field `{}` to be a `str`/`[]const u8`, but it is `{s}`.",
                         .{ i, @typeName(@TypeOf(f)) },
                     ));
                 },
-                .ComptimeInt => {},
-                .Int => |int| {
+                .comptime_int => {},
+                .int => |int| {
                     if (int.signedness != .unsigned or int.bits > 21) {
                         @compileError(std.fmt.comptimePrint(
                             "Expected field `{}` to be a `u21` coercible int, but it is `{s}`.",
@@ -759,10 +759,16 @@ pub const Arg = union(enum) {
         };
 
         const short_arg = Arg{ .shorts = .{ .flags = "a42,x" } };
-        try t.expectEqualDeep(Custom{ .a = 42, .b = .x }, try short_arg.parse(Custom, .{'a'}, null).?);
+        try t.expectEqualDeep(
+            Custom{ .a = 42, .b = .x },
+            try short_arg.parse(Custom, .{'a'}, null).?,
+        );
 
         const long_arg = Arg{ .long = .{ .flag = "a", .value = "42,x" } };
-        try t.expectEqualDeep(Custom{ .a = 42, .b = .x }, try long_arg.parse(Custom, .{"a"}, null).?);
+        try t.expectEqualDeep(
+            Custom{ .a = 42, .b = .x },
+            try long_arg.parse(Custom, .{"a"}, null).?,
+        );
     }
 };
 
