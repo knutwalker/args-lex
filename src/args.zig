@@ -18,7 +18,6 @@ pub const Args = struct {
     /// Create a new Args lexer using `std.process.args`.
     /// The args iterator is not cross-platform and does not work on Windows or WASI.
     /// This makes the lexer completely free of any allocations.
-    /// Must deinitialize the iterator buffer using `deinit` when done.
     pub fn initPosix() Iter {
         const native_os = @import("builtin").os.tag;
         if (native_os == .wasi or native_os == .windows) {
