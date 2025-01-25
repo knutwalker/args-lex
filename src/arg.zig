@@ -260,7 +260,7 @@ pub const Arg = union(enum) {
                     }
                 };
             },
-            else => {},
+            else => return null,
         }
 
         return switch (R) {
@@ -762,6 +762,14 @@ pub const Arg = union(enum) {
 
         const long_arg = Arg{ .long = .{ .flag = "a", .value = "42,x" } };
         try t.expectEqualDeep(Custom{ .a = 42, .b = .x }, try long_arg.parse(Custom, .{"a"}, null).?);
+    }
+
+    test "parse non flags" {
+        const value_arg = Arg{ .value = "42" };
+
+        try expect(null, value_arg.parse(bool, .{'a'}, null));
+        try expect(null, value_arg.parse(usize, .{'a'}, null));
+        try expect(null, value_arg.parse(i32, .{'a'}, null));
     }
 };
 
