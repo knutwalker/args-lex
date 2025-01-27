@@ -10,9 +10,7 @@ pub fn verifyIter(comptime Iter: type) void {
 
     switch (@TypeOf(Iter.next)) {
         fn (*Iter) ?[:0]const u8,
-        fn (Iter) ?[:0]const u8,
         fn (*Iter) ?[:0]u8,
-        fn (Iter) ?[:0]u8,
         => {},
         else => {
             @compileLog(Iter, Iter.next);
@@ -24,7 +22,6 @@ pub fn verifyIter(comptime Iter: type) void {
         switch (@TypeOf(Iter.deinit)) {
             fn (*Iter) void,
             fn (*const Iter) void,
-            fn (Iter) void,
             => {},
             else => {
                 @compileLog(Iter, Iter.deinit);
@@ -37,7 +34,6 @@ pub fn verifyIter(comptime Iter: type) void {
         switch (@TypeOf(Iter.reset)) {
             fn (*Iter) void,
             fn (*const Iter) void,
-            fn (Iter) void,
             => {},
             else => {
                 @compileLog(Iter, Iter.reset);
