@@ -82,8 +82,7 @@ pub fn GenericArgs(comptime Iter: type) type {
         /// Reset the underlying iterator, if it is supported.
         pub fn reset(self: *Self) void {
             if (!@hasDecl(Iter, "reset")) {
-                @compileLog(Iter);
-                @compileError("Underlying Iter does not support reset.");
+                @compileError(@typeName(Iter) ++ " does not support reset.");
             }
 
             self.iter.reset();
