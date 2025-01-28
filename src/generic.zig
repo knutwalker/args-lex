@@ -106,7 +106,10 @@ pub fn GenericArgs(comptime Iter: type) type {
         /// Calling this will invalidate any pointer previously returned
         /// from any `next` or `peek` method.
         pub fn next(self: *Self) ?*Arg {
-            _ = self.peek() orelse return null;
+            _ = self.peek() orelse {
+                self.returned = null;
+                return null;
+            };
             self.returned = self.peeked;
             self.peeked = null;
             return &(self.returned.?.arg);
@@ -140,6 +143,12 @@ pub fn GenericArgs(comptime Iter: type) type {
         /// false if there are no more arguments.
         pub fn skip(self: *Self) bool {
             return self.nextValue() != null;
+        }
+
+        /// Returns the last argument that had beed returned from [`next`] as
+        /// a plain value.
+        pub fn lastAsValue(self: *const Self) ?[:0]const u8 {
+            return (self.returned orelse return null).raw;
         }
 
         /// Wraps the args lexer in an iterator that handles the `--` escape sequence.
@@ -281,6 +290,12 @@ pub fn EscapingArgs(comptime Iter: type) type {
         /// false if there are no more arguments.
         pub fn skip(self: *Self) bool {
             return self.inner.skip();
+        }
+
+        /// Returns the last argument that had beed returned from [`next`] as
+        /// a plain value.
+        pub fn lastAsValue(self: *const Self) ?[:0]const u8 {
+            return self.inner.lastAsValue();
         }
     };
 }
@@ -437,6 +452,25 @@ test "skip" {
     try t.expectEqualDeep(Arg.Long{ .flag = "flag2" }, args.next().?.long);
     try t.expectEqual(false, args.skip());
     try t.expect(args.next() == null);
+}
+
+test "lastAsValue" {
+    var args = mkArgs(&.{ "bin", "--long", "-s", "value" });
+    defer args.deinit();
+
+    try t.expectEqualStrings("bin", args.nextValue().?);
+
+    try t.expectEqualDeep(Arg.Long{ .flag = "long" }, args.next().?.long);
+    try t.expectEqualStrings("--long", args.lastAsValue().?);
+
+    try t.expectEqualDeep(Arg.Shorts{ .flags = "s" }, args.next().?.shorts);
+    try t.expectEqualStrings("-s", args.lastAsValue().?);
+
+    try t.expectEqualStrings("value", args.next().?.value);
+    try t.expectEqualStrings("value", args.lastAsValue().?);
+
+    try t.expectEqual(null, args.next());
+    try t.expectEqual(null, args.lastAsValue());
 }
 
 test "reset" {
