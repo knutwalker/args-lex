@@ -145,7 +145,7 @@ pub fn GenericArgs(comptime Iter: type) type {
             return self.nextValue() != null;
         }
 
-        /// Returns the last argument that had beed returned from [`next`] as
+        /// Returns the last argument that had beed returned from `next` as
         /// a plain value.
         pub fn lastAsValue(self: *const Self) ?[:0]const u8 {
             return (self.returned orelse return null).raw;
@@ -292,7 +292,7 @@ pub fn EscapingArgs(comptime Iter: type) type {
             return self.inner.skip();
         }
 
-        /// Returns the last argument that had beed returned from [`next`] as
+        /// Returns the last argument that had beed returned from `next` as
         /// a plain value.
         pub fn lastAsValue(self: *const Self) ?[:0]const u8 {
             return self.inner.lastAsValue();

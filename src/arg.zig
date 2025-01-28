@@ -103,7 +103,7 @@ pub const Arg = union(enum) {
 
     /// Tests if this arg represents a boolean flag without a value.
     /// Note that repeated flags (such as `-vv`) cannot be counted with this method.
-    /// To do that, use [`parse`] instead.
+    /// To do that, use `parse` instead.
     ///
     /// The provided `flags` is a tuple of either short flag chars or
     /// long flag strings, both *without* their leading `-`
