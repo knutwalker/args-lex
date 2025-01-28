@@ -128,7 +128,7 @@ pub const Arg = union(enum) {
     /// The provided `flags` is a tuple of either short flag chars or
     /// long flag strings, both *without* their leading `-`
     /// ,e.g. `.{ "help", 'h' }`
-    pub fn flagOf(self: *const Arg, flags: anytype) FlagError!?Kind {
+    pub fn flagOf(self: *const Arg, flags: anytype) ?(FlagError!Kind) {
         validateFlags(flags);
 
         switch (self.*) {
@@ -498,22 +498,22 @@ pub const Arg = union(enum) {
 
     test flagOf {
         const short_arg = Arg{ .shorts = .{ .flags = "help" } };
-        try expect(.short, try short_arg.flagOf(.{ 'h', "help" }));
-        try expect(null, try short_arg.flagOf(.{ 'v', "value" }));
+        try expect(.short, short_arg.flagOf(.{ 'h', "help" }));
+        try expect(null, short_arg.flagOf(.{ 'v', "value" }));
 
         const long_arg = Arg{ .long = .{ .flag = "help", .value = null } };
-        try expect(.long, try long_arg.flagOf(.{ 'h', "help" }));
-        try expect(null, try long_arg.flagOf(.{ 'v', "value" }));
+        try expect(.long, long_arg.flagOf(.{ 'h', "help" }));
+        try expect(null, long_arg.flagOf(.{ 'v', "value" }));
 
         const long_arg_with_value = Arg{ .long = .{ .flag = "help", .value = "foo" } };
-        try std.testing.expectError(error.UnexpectedValueForFlag, long_arg_with_value.flagOf(.{ 'h', "help" }));
+        try std.testing.expectError(error.UnexpectedValueForFlag, long_arg_with_value.flagOf(.{ 'h', "help" }).?);
 
         // runtime values
         var short_flag: u8 = 'h';
         var long_flag: []const u8 = "help";
         _ = .{ &short_flag, &long_flag };
-        try expect(.short, try short_arg.flagOf(.{ short_flag, long_flag }));
-        try expect(.long, try long_arg.flagOf(.{ short_flag, long_flag }));
+        try expect(.short, short_arg.flagOf(.{ short_flag, long_flag }));
+        try expect(.long, long_arg.flagOf(.{ short_flag, long_flag }));
     }
 
     test valueOf {
