@@ -102,7 +102,8 @@ pub const Arg = union(enum) {
     };
 
     /// Tests if this arg represents a boolean flag without a value.
-    /// Note that repeated flags (such as `-vv`) cannot be counted with method.
+    /// Note that repeated flags (such as `-vv`) cannot be counted with this method.
+    /// To do that, use [`parse`] instead.
     ///
     /// The provided `flags` is a tuple of either short flag chars or
     /// long flag strings, both *without* their leading `-`
@@ -122,7 +123,8 @@ pub const Arg = union(enum) {
     };
 
     /// Tests if this arg represents a boolean flag.
-    /// Returns the kind of flag that has matched (long or short).
+    /// Returns the kind of flag that has matched (long or short),
+    /// or null of it doesn't match.
     /// If a value is provided to a long flag, an error is returned.
     ///
     /// The provided `flags` is a tuple of either short flag chars or
@@ -165,7 +167,8 @@ pub const Arg = union(enum) {
         }
     };
 
-    /// Returns the value represented by the given `flags`, or null if it doesn't match those.
+    /// Returns the value represented by the given `flags`,
+    /// or null if it doesn't match.
     ///
     /// The provided `flags` is a tuple of either short flag chars or
     /// long flag strings, both *without* their leading `-`
@@ -206,7 +209,8 @@ pub const Arg = union(enum) {
         InvalidValue,
     } || FlagError || std.fmt.ParseIntError || std.fmt.ParseFloatError;
 
-    /// Parsed the value represented by the given `flags` into the return type.
+    /// Parsed the value represented by the given `flags` into the return type,
+    /// or return null if it doesn't match.
     /// The type determines how the flag is parsed.
     ///
     /// The following values are supported, together with how they influence the parsing:
