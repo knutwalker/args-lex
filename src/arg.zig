@@ -264,14 +264,10 @@ pub const Arg = union(enum) {
                     }
                 };
             },
-            else => return null,
+            else => {},
         }
 
-        return switch (R) {
-            bool => false,
-            usize => 0,
-            else => null,
-        };
+        return null;
     }
 
     fn parseShortArg(R: type, sh: *Shorts, flag: u21, args: anytype) ParseError!R {
@@ -592,12 +588,12 @@ pub const Arg = union(enum) {
         const short_arg = Arg{ .shorts = .{ .flags = "abbbc=de" } };
 
         try expect(true, short_arg.parse(bool, .{'a'}, null));
-        try expect(false, short_arg.parse(bool, .{'x'}, null));
+        try expect(null, short_arg.parse(bool, .{'x'}, null));
 
         const long_arg = Arg{ .long = .{ .flag = "a", .value = null } };
 
         try expect(true, long_arg.parse(bool, .{"a"}, null));
-        try expect(false, long_arg.parse(bool, .{"x"}, null));
+        try expect(null, long_arg.parse(bool, .{"x"}, null));
     }
 
     test "parse into usize" {
@@ -605,12 +601,12 @@ pub const Arg = union(enum) {
 
         try expect(1, short_arg.parse(usize, .{'a'}, null));
         try expect(3, short_arg.parse(usize, .{'b'}, null));
-        try expect(0, short_arg.parse(usize, .{'x'}, null));
+        try expect(null, short_arg.parse(usize, .{'x'}, null));
 
         const long_arg = Arg{ .long = .{ .flag = "a", .value = null } };
 
         try expect(1, long_arg.parse(usize, .{"a"}, null));
-        try expect(0, long_arg.parse(usize, .{"x"}, null));
+        try expect(null, long_arg.parse(usize, .{"x"}, null));
     }
 
     test "parse into enum" {
