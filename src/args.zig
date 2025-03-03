@@ -24,7 +24,7 @@ pub const Args = struct {
             @compileError("Use `init` instead.");
         }
 
-        return .{ .inner = .{ .iter = std.process.args() } };
+        return .{ .iter = std.process.args() };
     }
 };
 
