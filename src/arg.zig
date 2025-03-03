@@ -233,8 +233,11 @@ pub const Arg = union(enum) {
     ///
     /// If the argument itself does not provide a value, but the type requires one,
     /// `args.nextValue()` is called on the provided `args`, expecting it to return
-    /// a `[:0]const u8`, which should be the outer args iterator.
-    /// This value can also be `{}` (void) or `null` if
+    /// a `[:0]const u8`, which should be the outer args iterator (likely passed
+    /// by taking a reference).
+    /// This value can also be `{}` (void) or `null` if you want to opt-out of
+    /// advancing the args iterator, e.g. for requiring that a value is always
+    /// provided together with the flag.
     ///
     /// Any type that requires a value can be wrapped in an optional (`?`) to
     /// not require the value. This can be used to differentiate between a
