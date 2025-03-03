@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 .{
-    .name = "args-lex",
+    .name = .args_lex,
     .version = "0.2.0",
     .paths = .{
         "build.zig",
@@ -12,4 +12,6 @@
         "README.md.template",
         "examples/",
     },
+    .minimum_zig_version = "0.14.0-dev.3445+6c3cbb0c8",
+    .fingerprint = 0x3de050efb4f37737,
 }
