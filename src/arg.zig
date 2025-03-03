@@ -17,8 +17,8 @@ pub const Arg = union(enum) {
         flag: []const u8,
         value: ?[:0]const u8 = null,
 
-        pub fn format(self: @This(), comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-            _ = .{ fmt, options };
+        pub fn format(self: @This(), comptime template: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+            _ = .{ template, options };
             return writer.print("Long{{ .flag = --{s}, .value = {?s} }}", .{ self.flag, self.value });
         }
     };
@@ -79,8 +79,8 @@ pub const Arg = union(enum) {
             return is_number(self.flags);
         }
 
-        pub fn format(self: @This(), comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-            _ = .{ fmt, options };
+        pub fn format(self: @This(), comptime template: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+            _ = .{ template, options };
             return writer.print("Short{{ -{s} }}", .{self.flags});
         }
     };
@@ -92,8 +92,8 @@ pub const Arg = union(enum) {
         /// A non UTF-8 suffix of the remaining short arg
         suffix: [:0]const u8,
 
-        pub fn format(self: @This(), comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-            _ = .{ fmt, options };
+        pub fn format(self: @This(), comptime template: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+            _ = .{ template, options };
             switch (self) {
                 .flag => |flag| return writer.print("Short{{ -{u} }}", .{flag}),
                 .suffix => |suffix| return writer.print("Short{{ -{s} }}", .{suffix}),
@@ -418,6 +418,30 @@ pub const Arg = union(enum) {
                     ));
                 },
             }
+        }
+    }
+
+    pub fn fmt(arg: *const Arg) std.fmt.Formatter(print) {
+        return .{ .data = arg };
+    }
+
+    pub fn print(arg: *const Arg, comptime template: []const u8, opts: std.fmt.FormatOptions, writer: anytype) !void {
+        _ = .{ template, opts };
+        switch (arg.*) {
+            .shorts => |s| {
+                try writer.print("-{s}", .{s.flags});
+            },
+            .long => |l| {
+                if (l.value) |lv| {
+                    try writer.print("--{s}={s}", .{ l.flag, lv });
+                } else {
+                    try writer.print("--{s}", .{l.flag});
+                }
+            },
+            .value => |v| {
+                try writer.writeAll(v);
+            },
+            .escape => try writer.writeAll("--"),
         }
     }
 
@@ -779,6 +803,23 @@ pub const Arg = union(enum) {
         try expect(null, value_arg.parse(bool, .{'a'}, null));
         try expect(null, value_arg.parse(usize, .{'a'}, null));
         try expect(null, value_arg.parse(i32, .{'a'}, null));
+    }
+
+    test "render" {
+        const value_arg = Arg{ .value = "42" };
+        try t.expectFmt("42", "{}", .{value_arg.fmt()});
+
+        const short_arg = Arg{ .shorts = .{ .flags = "a42" } };
+        try t.expectFmt("-a42", "{}", .{short_arg.fmt()});
+
+        const long_arg = Arg{ .long = .{ .flag = "a", .value = null } };
+        try t.expectFmt("--a", "{}", .{long_arg.fmt()});
+
+        const long_arg_with_value = Arg{ .long = .{ .flag = "a", .value = "42" } };
+        try t.expectFmt("--a=42", "{}", .{long_arg_with_value.fmt()});
+
+        const escape_arg = Arg{ .escape = {} };
+        try t.expectFmt("--", "{}", .{escape_arg.fmt()});
     }
 };
 
