@@ -170,34 +170,26 @@ pub const Arg = union(enum) {
     /// Returns the value represented by the given `flags`,
     /// or null if it doesn't match.
     ///
+    /// If the argument itself does not provide a value, but the type requires
+    /// one, `args.nextValue()` is called on the provided `args`, expecting
+    /// it to return a `[:0]const u8`, which should be the outer args iterator
+    /// (likely passed by taking a reference).
+    /// This value can also be `{}` (void) or `null` if you want to opt-out of
+    /// advancing the args iterator, e.g. for requiring that a value is always
+    /// provided together with the flag.
+    ///
     /// The provided `flags` is a tuple of either short flag chars or
     /// long flag strings, both *without* their leading `-`
     /// ,e.g. `.{ "help", 'h' }`
-    pub fn valueOf(self: *const Arg, flags: anytype) ?ArgValue {
+    pub fn valueOf(self: *const Arg, flags: anytype, args: anytype) ?ArgValue {
         validateFlags(flags);
 
-        switch (self.*) {
-            .shorts => |shorts| {
-                var sh = shorts;
-                while (sh.nextFlag()) |s| {
-                    inline for (flags) |f| if (@typeInfo(@TypeOf(f)) != .pointer) {
-                        if (s == f) {
-                            const val = sh.value();
-                            const value = if (val.len > 0) val else null;
-                            return .{ .short = value };
-                        }
-                    };
-                }
-            },
-            .long => |long| {
-                inline for (flags) |f| if (@typeInfo(@TypeOf(f)) == .pointer) {
-                    if (std.mem.eql(u8, long.flag, f)) return .{ .long = long.value };
-                };
-            },
-            else => {},
-        }
-
-        return null;
+        const value = self.parse(?[:0]const u8, flags, args) orelse return null;
+        return switch (self.*) {
+            .shorts => .{ .short = value catch unreachable },
+            .long => .{ .long = value catch unreachable },
+            else => unreachable,
+        };
     }
 
     pub const ParseError = error{
@@ -231,10 +223,10 @@ pub const Arg = union(enum) {
     /// to parse multiple values. To allow multiple values separated by some
     /// delimiter, parse as `[]const u8` and do the parsing on your side.
     ///
-    /// If the argument itself does not provide a value, but the type requires one,
-    /// `args.nextValue()` is called on the provided `args`, expecting it to return
-    /// a `[:0]const u8`, which should be the outer args iterator (likely passed
-    /// by taking a reference).
+    /// If the argument itself does not provide a value, but the type requires
+    /// one, `args.nextValue()` is called on the provided `args`, expecting
+    /// it to return a `[:0]const u8`, which should be the outer args iterator
+    /// (likely passed by taking a reference).
     /// This value can also be `{}` (void) or `null` if you want to opt-out of
     /// advancing the args iterator, e.g. for requiring that a value is always
     /// provided together with the flag.
@@ -545,30 +537,30 @@ pub const Arg = union(enum) {
 
     test valueOf {
         const short_arg = Arg{ .shorts = .{ .flags = "v=foo" } };
-        try expectStr("foo", short_arg.valueOf(.{ 'v', "value" }).?.short.?);
-        try expectStr("foo", short_arg.valueOf(.{ 'v', "value" }).?.value().?);
-        try expect(null, short_arg.valueOf(.{ 'h', "help" }));
+        try expectStr("foo", short_arg.valueOf(.{ 'v', "value" }, null).?.short.?);
+        try expectStr("foo", short_arg.valueOf(.{ 'v', "value" }, null).?.value().?);
+        try expect(null, short_arg.valueOf(.{ 'h', "help" }, null));
 
         const short_arg_no_equal = Arg{ .shorts = .{ .flags = "vfoo" } };
-        try expectStr("foo", short_arg_no_equal.valueOf(.{ 'v', "value" }).?.short.?);
+        try expectStr("foo", short_arg_no_equal.valueOf(.{ 'v', "value" }, null).?.short.?);
 
         const short_arg_no_value = Arg{ .shorts = .{ .flags = "v" } };
-        try expect(null, short_arg_no_value.valueOf(.{ 'v', "value" }).?.short);
+        try expect(null, short_arg_no_value.valueOf(.{ 'v', "value" }, null).?.short);
 
         const long_arg = Arg{ .long = .{ .flag = "value", .value = "foo" } };
-        try expect("foo", long_arg.valueOf(.{ 'v', "value" }).?.long.?);
-        try expect("foo", long_arg.valueOf(.{ 'v', "value" }).?.value().?);
-        try expect(null, long_arg.valueOf(.{ 'h', "help" }));
+        try expect("foo", long_arg.valueOf(.{ 'v', "value" }, null).?.long.?);
+        try expect("foo", long_arg.valueOf(.{ 'v', "value" }, null).?.value().?);
+        try expect(null, long_arg.valueOf(.{ 'h', "help" }, null));
 
         const long_arg_no_value = Arg{ .long = .{ .flag = "value", .value = null } };
-        try expect(null, long_arg_no_value.valueOf(.{ 'v', "value" }).?.long);
+        try expect(null, long_arg_no_value.valueOf(.{ 'v', "value" }, null).?.long);
 
         // runtime values
         var short_flag: u8 = 'v';
         var long_flag: []const u8 = "value";
         _ = .{ &short_flag, &long_flag };
-        try expectStr("foo", short_arg.valueOf(.{ short_flag, long_flag }).?.short.?);
-        try expectStr("foo", long_arg.valueOf(.{ short_flag, long_flag }).?.long.?);
+        try expectStr("foo", short_arg.valueOf(.{ short_flag, long_flag }, null).?.short.?);
+        try expectStr("foo", long_arg.valueOf(.{ short_flag, long_flag }, null).?.long.?);
     }
 
     test parse {
