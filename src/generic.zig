@@ -79,6 +79,12 @@ pub fn GenericArgs(comptime Iter: type) type {
             }
         }
 
+        /// Checks if calling `reset` is supported.
+        pub fn canReset(self: *const Self) bool {
+            _ = self;
+            return @hasDecl(Iter, "reset");
+        }
+
         /// Reset the underlying iterator, if it is supported.
         pub fn reset(self: *Self) void {
             if (!@hasDecl(Iter, "reset")) {
