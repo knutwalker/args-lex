@@ -39,13 +39,13 @@ and are not locked out of anything.
 Update to latest version:
 
 ```sh
-zig fetch --save git+https://github.com/knutwalker/args-lex.git
+zig fetch --save git+{[repo]s}.git
 ```
 
 Add to `build.zig`:
 
 ```zig
-exe.root_module.addImport("args-lex", b.dependency("args-lex", .{{}}).module("args-lex"));
+exe.root_module.addImport("{[name]s}", b.dependency("{[name]s}", .{{}}).module("{[name]s}"));
 ```
 
 > [!IMPORTANT]
