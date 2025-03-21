@@ -218,7 +218,7 @@ pub const Arg = union(enum) {
     /// |type          | value       | parsing                             |
     /// |--------------|-------------|-------------------------------------|
     /// |`bool`        | not allowed | checks for existence                |
-    /// |`usize`       | not allowed | count occurences                    |
+    /// |`usize`       | not allowed | count occurrences                   |
     /// |`u*` int      | required    | parse value as unsigned number      |
     /// |`i*` int      | required    | parse value as signed number        |
     /// |`f*` float    | required    | parse value as float                |

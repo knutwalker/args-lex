@@ -148,7 +148,7 @@ pub fn main() !void {
         // Skip the binary name
         _ = args.nextValue().?;
 
-        // Intialize the result type with all defaults.
+        // Initialize the result type with all defaults.
         // If some args are required, they need to be wrapped in an option
         // and validated after the loop.
         var options: MyOptions = .{};
@@ -157,7 +157,7 @@ pub fn main() !void {
         // Don't store to pointers without making a copy,
         // every call to `next` will invalidate those pointers.
         // Calling `next` (or any of its variants) will never fail or panic.
-        // A `null` inidicated the end of the arguments list.
+        // A `null` indicated the end of the arguments list.
         while (args.next()) |arg| {
             switch (arg.*) {
                 // `arg` is the `--` escape. Usually that means that the remaining
@@ -187,7 +187,7 @@ pub fn main() !void {
                     // numbers and treat is as a `value` instead. In this example,
                     // we imply that any negative number must be for the `a` flag.
                     if (shorts.looks_like_number()) {
-                        // `value` will return everything *afer* the leading `-`,
+                        // `value` will return everything *after* the leading `-`,
                         // so we need to negate the number on our own.
                         options.a = -(try std.fmt.parseInt(i32, shorts.value(), 10));
                         continue;
