@@ -151,12 +151,6 @@ pub fn GenericArgs(comptime Iter: type) type {
             return self.nextAsValue() != null;
         }
 
-        /// Returns the last argument that had beed returned from `next` as
-        /// a plain value.
-        pub fn lastAsValue(self: *const Self) ?[:0]const u8 {
-            return (self.returned orelse return null).raw;
-        }
-
         /// Wraps the args lexer in an iterator that handles the `--` escape sequence.
         pub fn handleEscape(self: Self) EscapingArgs(Iter) {
             return .{ .inner = self };
@@ -458,25 +452,6 @@ test "skip" {
     try t.expectEqualDeep(Arg.Long{ .flag = "flag2" }, args.next().?.long);
     try t.expectEqual(false, args.skip());
     try t.expect(args.next() == null);
-}
-
-test "lastAsValue" {
-    var args = mkArgs(&.{ "bin", "--long", "-s", "value" });
-    defer args.deinit();
-
-    try t.expectEqualStrings("bin", args.nextValue().?);
-
-    try t.expectEqualDeep(Arg.Long{ .flag = "long" }, args.next().?.long);
-    try t.expectEqualStrings("--long", args.lastAsValue().?);
-
-    try t.expectEqualDeep(Arg.Shorts{ .flags = "s" }, args.next().?.shorts);
-    try t.expectEqualStrings("-s", args.lastAsValue().?);
-
-    try t.expectEqualStrings("value", args.next().?.value);
-    try t.expectEqualStrings("value", args.lastAsValue().?);
-
-    try t.expectEqual(null, args.next());
-    try t.expectEqual(null, args.lastAsValue());
 }
 
 test "reset" {
