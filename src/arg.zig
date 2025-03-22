@@ -62,7 +62,7 @@ pub const Arg = union(enum) {
 
         /// Returns the remaining shortflags as a single value
         /// without consuming those values
-        pub fn peekValue(self: *const Shorts) [:0]const u8 {
+        pub fn peekValue(self: Shorts) [:0]const u8 {
             return if (std.mem.startsWith(u8, self.flags, "=")) self.flags[1..] else self.flags;
         }
 

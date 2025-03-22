@@ -12,13 +12,16 @@ pub fn main() !void {
     defer args.deinit();
 
     while (args.next()) |arg| {
-        switch (arg.*) {
+        switch (arg) {
             .escape => while (args.nextAsValue()) |value| {
                 std.debug.print("POSITIONAL: {s}\n", .{value});
             },
-            .shorts => |*shorts| while (shorts.next()) |short| switch (short) {
-                .flag => |flag| std.debug.print("-{u}\n", .{flag}),
-                .suffix => |s| std.debug.print("non utf8 flag: {any}\n", .{s}),
+            .shorts => |shorts_arg| {
+                var shorts = shorts_arg;
+                while (shorts.next()) |short| switch (short) {
+                    .flag => |flag| std.debug.print("-{u}\n", .{flag}),
+                    .suffix => |s| std.debug.print("non utf8 flag: {any}\n", .{s}),
+                };
             },
             .long => |long| {
                 std.debug.print("--{s}", .{long.flag});

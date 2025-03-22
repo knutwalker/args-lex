@@ -64,7 +64,7 @@ pub fn main() !void {
         // Calling `next` (or any of its variants) will never fail or panic.
         // A `null` indicated the end of the arguments list.
         while (args.next()) |arg| {
-            switch (arg.*) {
+            switch (arg) {
                 // `arg` is the `--` escape. Usually that means that the remaining
                 // args are no longer supposed to be parsed.
                 // That decision is up to the user, and we are doing just that.
@@ -86,19 +86,20 @@ pub fn main() !void {
                 },
                 // `arg` is one or more short flags, or a negative number.
                 // That is, it starts with `-`, but not with `--`.
-                .shorts => |*shorts| {
+                .shorts => |shorts_arg| {
                     // Command line parsers often do not support negative numbers,
                     // because it is ambiguous. We can choose to look for negative
                     // numbers and treat is as a `value` instead. In this example,
                     // we imply that any negative number must be for the `a` flag.
-                    if (shorts.looks_like_number()) {
+                    if (shorts_arg.looks_like_number()) {
                         // `value` will return everything *after* the leading `-`,
                         // so we need to negate the number on our own.
-                        options.a = -(try std.fmt.parseInt(i32, shorts.value(), 10));
+                        options.a = -(try std.fmt.parseInt(i32, shorts_arg.peekValue(), 10));
                         continue;
                     }
                     // Iterate over any short flag. There is no special handling
                     // of `=` done in `next`.
+                    var shorts = shorts_arg;
                     while (shorts.next()) |short| switch (short) {
                         // The typical case, where the short flag is a valid
                         // Unicode codepoint (`flag` here is a `u21`).

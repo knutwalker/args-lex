@@ -53,7 +53,6 @@ pub fn GenericArgs(comptime Iter: type) type {
     return struct {
         iter: Iter,
         peeked: ?RawArg = null,
-        returned: ?RawArg = null,
 
         const Self = @This();
         pub const Inner = Iter;
@@ -70,10 +69,9 @@ pub fn GenericArgs(comptime Iter: type) type {
         }
 
         /// Free the internal iterator's buffers.
-        /// Invalidates all slices and pointers returned from this Args.
+        /// Invalidates all slices in any arg returned from this Args.
         pub fn deinit(self: *Self) void {
             self.peeked = null;
-            self.returned = null;
             if (@hasDecl(Iter, "deinit")) {
                 self.iter.deinit();
             }
@@ -96,34 +94,23 @@ pub fn GenericArgs(comptime Iter: type) type {
 
         /// Peek at the next `Arg` without consuming it.
         /// Repeated calls will return the same `Arg`.
-        /// Calling any form of `next` will invalidate this pointer.
-        /// However, calling `peek` will *not* invalidate a pointer
-        /// returned from `next`.
-        pub fn peek(self: *Self) ?*Arg {
+        pub fn peek(self: *Self) ?Arg {
             if (self.peeked == null) {
                 const next_raw = self.iter.next() orelse return null;
                 const next_arg = parse(next_raw);
                 self.peeked = .{ .arg = next_arg, .raw = next_raw };
             }
-            return &(self.peeked.?.arg);
+            return self.peeked.?.arg;
         }
 
         /// Return the next `Arg`.
-        /// Calling this will invalidate any pointer previously returned
-        /// from any `next` or `peek` method.
-        pub fn next(self: *Self) ?*Arg {
-            _ = self.peek() orelse {
-                self.returned = null;
-                return null;
-            };
-            self.returned = self.peeked;
-            self.peeked = null;
-            return &(self.returned.?.arg);
+        pub fn next(self: *Self) ?Arg {
+            _ = self.peek() orelse return null;
+            defer self.peeked = null;
+            return self.peeked.?.arg;
         }
 
         /// Return the next arg as a value, even if it looks like a flag.
-        /// Calling this will invalidate any pointer returned from `peek`,
-        /// but will not invalidate pointers returned from other `next` methods.
         pub fn nextAsValue(self: *Self) ?[:0]const u8 {
             if (self.peeked == null) {
                 return self.iter.next();
@@ -133,14 +120,13 @@ pub fn GenericArgs(comptime Iter: type) type {
         }
 
         /// Returns the next args only if it is a value.
-        /// Calling this will invalidate any pointer returned from `peek`,
-        /// and non-null return values will invalidate any pointer returned
-        /// from any `next` method.
         pub fn nextIfValue(self: *Self) ?[:0]const u8 {
             const peeked = self.peek() orelse return null;
-            switch (peeked.*) {
-                .value => return self.nextValue(),
-                else => return null,
+            if (peeked == .value) {
+                defer self.peeked = null;
+                return peeked.value;
+            } else {
+                return null;
             }
         }
 
@@ -219,7 +205,7 @@ pub fn EscapingArgs(comptime Iter: type) type {
         /// This is because peeking at an item is not consuming it,
         /// and the escape handling only happens after the escape token
         /// is consumed.
-        pub fn peek(self: *Self) ?*Arg {
+        pub fn peek(self: *Self) ?Arg {
             return self.inner.peek();
         }
 
@@ -230,14 +216,14 @@ pub fn EscapingArgs(comptime Iter: type) type {
         /// This will never return `.escape`.
         /// After having seen that escape token internally, all remaining
         /// args are returned as `.value`.
-        pub fn next(self: *Self) ?*Arg {
+        pub fn next(self: *Self) ?Arg {
             if (self.has_seen_escape) {
                 const val = self.inner.nextAsValue() orelse return null;
                 self.value_arg = Arg{ .value = val };
-                return &self.value_arg.?;
+                return self.value_arg.?;
             }
             const ret = self.inner.next() orelse return null;
-            if (ret.* == .escape) {
+            if (ret == .escape) {
                 self.has_seen_escape = true;
                 return self.next();
             } else {
@@ -257,7 +243,7 @@ pub fn EscapingArgs(comptime Iter: type) type {
                 return self.inner.nextAsValue();
             }
             const peeked = self.peek() orelse return null;
-            if (peeked.* == .escape) {
+            if (peeked == .escape) {
                 self.has_seen_escape = true;
                 _ = self.skip();
             }
@@ -277,7 +263,7 @@ pub fn EscapingArgs(comptime Iter: type) type {
                 return self.inner.nextAsValue();
             }
             const peeked = self.peek() orelse return null;
-            if (peeked.* == .escape) {
+            if (peeked == .escape) {
                 self.has_seen_escape = true;
                 _ = self.skip();
                 return self.inner.nextAsValue();
@@ -316,7 +302,7 @@ test "escape" {
     defer args.deinit();
 
     try t.expectEqualStrings("bin", args.nextAsValue().?);
-    try t.expectEqualDeep(.escape, args.next().?.*);
+    try t.expectEqualDeep(.escape, args.next().?);
     try t.expect(args.next() == null);
 }
 
