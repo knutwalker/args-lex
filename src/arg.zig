@@ -240,16 +240,22 @@ pub const Arg = union(enum) {
                 return result;
             },
             []const u8, [:0]const u8 => {
-                return shortArgValue(sh, args) orelse ParseError.MissingRequiredValue;
+                const value, const source = try peekShortArgValue(sh, args);
+                if (source == .args) consumeNextValue(args);
+                return value;
             },
             else => switch (@typeInfo(R)) {
                 .int => {
-                    const value = shortArgValue(sh, args) orelse return ParseError.MissingRequiredValue;
-                    return std.fmt.parseInt(R, value, 0);
+                    const value, const source = try peekShortArgValue(sh, args);
+                    const res = try std.fmt.parseInt(R, value, 0);
+                    if (source == .args) consumeNextValue(args);
+                    return res;
                 },
                 .float => {
-                    const value = shortArgValue(sh, args) orelse return ParseError.MissingRequiredValue;
-                    return std.fmt.parseFloat(R, value);
+                    const value, const source = try peekShortArgValue(sh, args);
+                    const res = try std.fmt.parseFloat(R, value);
+                    if (source == .args) consumeNextValue(args);
+                    return res;
                 },
                 .optional => |o| {
                     return parseShortArg(o.child, sh, flag, args) catch |err| switch (err) {
@@ -258,20 +264,30 @@ pub const Arg = union(enum) {
                     };
                 },
                 .@"enum" => {
-                    const value = shortArgValue(sh, args) orelse return ParseError.MissingRequiredValue;
-                    return std.meta.stringToEnum(R, value) orelse ParseError.InvalidEnumTag;
+                    const value, const source = try peekShortArgValue(sh, args);
+                    const res = std.meta.stringToEnum(R, value) orelse return ParseError.InvalidEnumTag;
+                    if (source == .args) consumeNextValue(args);
+                    return res;
                 },
                 else => {
-                    const value = shortArgValue(sh, args) orelse return ParseError.MissingRequiredValue;
-                    return parseCustom(R, value);
+                    const value, const source = try peekShortArgValue(sh, args);
+                    const res = try parseCustom(R, value);
+                    if (source == .args) consumeNextValue(args);
+                    return res;
                 },
             },
         }
     }
 
-    fn shortArgValue(sh: *const Shorts, args: anytype) ?[:0]const u8 {
+    fn peekShortArgValue(sh: *const Shorts, args: anytype) !struct { [:0]const u8, enum { flag, args } } {
         const val = sh.peekValue();
-        return if (val.len > 0) val else nextValue(args);
+        if (val.len > 0) {
+            return .{ val, .flag };
+        }
+        if (peekNextValue(args)) |v| {
+            return .{ v, .args };
+        }
+        return ParseError.MissingRequiredValue;
     }
 
     fn parseLongArg(R: type, long: Long, args: anytype) ParseError!R {
@@ -283,16 +299,22 @@ pub const Arg = union(enum) {
                 return if (long.value) |_| ParseError.UnexpectedValueForFlag else 1;
             },
             []const u8, [:0]const u8 => {
-                return longArgValue(long, args) orelse ParseError.MissingRequiredValue;
+                const value, const source = try peekLongArgValue(long, args);
+                if (source == .args) consumeNextValue(args);
+                return value;
             },
             else => switch (@typeInfo(R)) {
                 .int => {
-                    const value = longArgValue(long, args) orelse return ParseError.MissingRequiredValue;
-                    return std.fmt.parseInt(R, value, 0);
+                    const value, const source = try peekLongArgValue(long, args);
+                    const res = try std.fmt.parseInt(R, value, 0);
+                    if (source == .args) consumeNextValue(args);
+                    return res;
                 },
                 .float => {
-                    const value = longArgValue(long, args) orelse return ParseError.MissingRequiredValue;
-                    return std.fmt.parseFloat(R, value);
+                    const value, const source = try peekLongArgValue(long, args);
+                    const res = try std.fmt.parseFloat(R, value);
+                    if (source == .args) consumeNextValue(args);
+                    return res;
                 },
                 .optional => |o| {
                     return parseLongArg(o.child, long, args) catch |err| switch (err) {
@@ -301,25 +323,42 @@ pub const Arg = union(enum) {
                     };
                 },
                 .@"enum" => {
-                    const value = longArgValue(long, args) orelse return ParseError.MissingRequiredValue;
-                    return std.meta.stringToEnum(R, value) orelse ParseError.InvalidEnumTag;
+                    const value, const source = try peekLongArgValue(long, args);
+                    const res = std.meta.stringToEnum(R, value) orelse return ParseError.InvalidEnumTag;
+                    if (source == .args) consumeNextValue(args);
+                    return res;
                 },
                 else => {
-                    const value = longArgValue(long, args) orelse return ParseError.MissingRequiredValue;
-                    return parseCustom(R, value);
+                    const value, const source = try peekLongArgValue(long, args);
+                    const res = try parseCustom(R, value);
+                    if (source == .args) consumeNextValue(args);
+                    return res;
                 },
             },
         }
     }
 
-    fn longArgValue(long: Long, args: anytype) ?[:0]const u8 {
-        return long.value orelse nextValue(args);
+    fn peekLongArgValue(long: Long, args: anytype) !struct { [:0]const u8, enum { flag, args } } {
+        if (long.value) |v| {
+            return .{ v, .flag };
+        }
+        if (peekNextValue(args)) |v| {
+            return .{ v, .args };
+        }
+        return ParseError.MissingRequiredValue;
     }
 
-    fn nextValue(args: anytype) ?[:0]const u8 {
+    fn peekNextValue(args: anytype) ?[:0]const u8 {
         switch (@typeInfo(@TypeOf(args))) {
             .void, .null => return null,
-            else => return args.nextAsValue(),
+            else => return args.peekAsValue(),
+        }
+    }
+
+    fn consumeNextValue(args: anytype) void {
+        switch (@typeInfo(@TypeOf(args))) {
+            .void, .null => {},
+            else => _ = args.nextAsValue(),
         }
     }
 
@@ -853,6 +892,28 @@ pub const Arg = union(enum) {
                     Custom => try t.expectEqual(Custom{}, res),
                     else => unreachable,
                 }
+            }
+        }
+    }
+
+    test "parse not reading value on parse error" {
+        const Enum = enum { @"42" };
+        const Custom = struct {
+            pub fn parse(_: []const u8) ParseError!@This() {
+                return ParseError.InvalidValue;
+            }
+        };
+
+        inline for (.{ &.{ "--flag", "poop" }, &.{ "-f", "poop" } }) |args_input| {
+            var args = @import("args.zig").SliceArgs.init(args_input);
+
+            inline for (.{ u32, f32, Enum, Custom }) |R| {
+                args.reset();
+
+                const arg = args.next().?;
+                const res = arg.parse(R, .{ 'f', "flag" }, &args).?;
+                try t.expect(std.meta.isError(res));
+                try t.expectEqualStrings("poop", args.nextAsValue().?);
             }
         }
     }
