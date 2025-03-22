@@ -131,29 +131,11 @@ pub const Arg = union(enum) {
     /// long flag strings, both *without* their leading `-`
     /// ,e.g. `.{ "help", 'h' }`
     pub fn flagOf(self: Arg, flags: anytype) ?(FlagError!Kind) {
-        validateFlags(flags);
-
-        switch (self) {
-            .shorts => |shorts| {
-                var sh = shorts;
-                while (sh.nextFlag()) |s| {
-                    inline for (flags) |f| if (@typeInfo(@TypeOf(f)) != .pointer) {
-                        if (s == f) return .short;
-                    };
-                }
-            },
-            .long => |long| {
-                inline for (flags) |f| if (@typeInfo(@TypeOf(f)) == .pointer) {
-                    if (std.mem.eql(u8, long.flag, f)) {
-                        if (long.value != null) return FlagError.UnexpectedValueForFlag;
-                        return .long;
-                    }
-                };
-            },
-            else => {},
-        }
-
-        return null;
+        const value = self.valueOf(flags, null) orelse return null;
+        return switch (value) {
+            .short => .short,
+            .long => |lv| if (lv != null) error.UnexpectedValueForFlag else .long,
+        };
     }
 
     pub const ArgValue = union(Kind) {
