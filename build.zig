@@ -10,13 +10,13 @@ const Manifest = struct {
     fingerprint: u64,
 
     const it: Manifest = @import("build.zig.zon");
-    const lib_name = lib_name: {
-        const name = std.mem.trimLeft(u8, @tagName(it.name), ".");
-        var dashed_name_buf: [name.len]u8 = undefined;
-        @memcpy(&dashed_name_buf, name);
+    const lib_name = std.mem.trimLeft(u8, @tagName(it.name), ".");
+    const repo_name = repo_name: {
+        var dashed_name_buf: [lib_name.len]u8 = undefined;
+        @memcpy(&dashed_name_buf, lib_name);
         std.mem.replaceScalar(u8, &dashed_name_buf, '_', '-');
         const dashed_name = dashed_name_buf;
-        break :lib_name &dashed_name;
+        break :repo_name &dashed_name;
     };
 };
 
@@ -77,10 +77,9 @@ pub fn build(b: *std.Build) void {
             break :readme @as(?*std.Build.Step.Run, null);
 
         // build vars {{{
-        const repo_name = try std.mem.replaceOwned(u8, b.allocator, Manifest.lib_name, "_", "-");
         const build_vars = b.addOptions();
         build_vars.addOption([]const u8, "lib_name", Manifest.lib_name);
-        build_vars.addOption([]const u8, "repo", b.fmt("https://github.com/knutwalker/{s}", .{repo_name}));
+        build_vars.addOption([]const u8, "repo", b.fmt("https://github.com/knutwalker/{s}", .{Manifest.repo_name}));
         // }}}
 
         var gen_readme = b.addExecutable(.{

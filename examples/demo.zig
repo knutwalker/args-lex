@@ -2,7 +2,7 @@
 
 const std = @import("std");
 
-const args_lex = @import("args-lex");
+const args_lex = @import("args_lex");
 
 pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
