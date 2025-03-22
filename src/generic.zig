@@ -103,6 +103,12 @@ pub fn GenericArgs(comptime Iter: type) type {
             return self.peeked.?.arg;
         }
 
+        /// Peek at the next argument as a value, even if it looks like a flag.
+        pub fn peekAsValue(self: *Self) ?[:0]const u8 {
+            _ = self.peek() orelse return null;
+            return self.peeked.?.raw;
+        }
+
         /// Return the next `Arg`.
         pub fn next(self: *Self) ?Arg {
             _ = self.peek() orelse return null;
