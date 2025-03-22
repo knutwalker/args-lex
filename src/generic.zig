@@ -124,7 +124,7 @@ pub fn GenericArgs(comptime Iter: type) type {
         /// Return the next arg as a value, even if it looks like a flag.
         /// Calling this will invalidate any pointer returned from `peek`,
         /// but will not invalidate pointers returned from other `next` methods.
-        pub fn nextValue(self: *Self) ?[:0]const u8 {
+        pub fn nextAsValue(self: *Self) ?[:0]const u8 {
             if (self.peeked == null) {
                 return self.iter.next();
             }
@@ -148,7 +148,7 @@ pub fn GenericArgs(comptime Iter: type) type {
         /// Returns true if an argument was skipped,
         /// false if there are no more arguments.
         pub fn skip(self: *Self) bool {
-            return self.nextValue() != null;
+            return self.nextAsValue() != null;
         }
 
         /// Returns the last argument that had beed returned from `next` as
@@ -238,7 +238,7 @@ pub fn EscapingArgs(comptime Iter: type) type {
         /// args are returned as `.value`.
         pub fn next(self: *Self) ?*Arg {
             if (self.has_seen_escape) {
-                const val = self.inner.nextValue() orelse return null;
+                const val = self.inner.nextAsValue() orelse return null;
                 self.value_arg = Arg{ .value = val };
                 return &self.value_arg.?;
             }
@@ -258,16 +258,16 @@ pub fn EscapingArgs(comptime Iter: type) type {
         /// This will never return `.escape`.
         /// After having seen that escape token internally, all remaining
         /// args are returned as `.value`.
-        pub fn nextValue(self: *Self) ?[:0]const u8 {
+        pub fn nextAsValue(self: *Self) ?[:0]const u8 {
             if (self.has_seen_escape) {
-                return self.inner.nextValue();
+                return self.inner.nextAsValue();
             }
             const peeked = self.peek() orelse return null;
             if (peeked.* == .escape) {
                 self.has_seen_escape = true;
                 _ = self.skip();
             }
-            return self.inner.nextValue();
+            return self.inner.nextAsValue();
         }
 
         /// Returns the next args only if it is a value.
@@ -280,13 +280,13 @@ pub fn EscapingArgs(comptime Iter: type) type {
         /// args are returned as `.value`.
         pub fn nextIfValue(self: *Self) ?[:0]const u8 {
             if (self.has_seen_escape) {
-                return self.inner.nextValue();
+                return self.inner.nextAsValue();
             }
             const peeked = self.peek() orelse return null;
             if (peeked.* == .escape) {
                 self.has_seen_escape = true;
                 _ = self.skip();
-                return self.inner.nextValue();
+                return self.inner.nextAsValue();
             }
             return self.inner.nextIfValue();
         }
@@ -312,7 +312,7 @@ test "stdio" {
     var args = mkArgs(&.{ "bin", "-" });
     defer args.deinit();
 
-    try t.expectEqualStrings("bin", args.nextValue().?);
+    try t.expectEqualStrings("bin", args.nextAsValue().?);
     try t.expectEqualStrings("-", args.next().?.value);
     try t.expect(args.next() == null);
 }
@@ -321,7 +321,7 @@ test "escape" {
     var args = mkArgs(&.{ "bin", "--" });
     defer args.deinit();
 
-    try t.expectEqualStrings("bin", args.nextValue().?);
+    try t.expectEqualStrings("bin", args.nextAsValue().?);
     try t.expectEqualDeep(.escape, args.next().?.*);
     try t.expect(args.next() == null);
 }
@@ -330,7 +330,7 @@ test "long with no value" {
     var args = mkArgs(&.{ "bin", "--long" });
     defer args.deinit();
 
-    try t.expectEqualStrings("bin", args.nextValue().?);
+    try t.expectEqualStrings("bin", args.nextAsValue().?);
     try t.expectEqualDeep(Arg.Long{ .flag = "long" }, args.next().?.long);
     try t.expect(args.next() == null);
 }
@@ -339,7 +339,7 @@ test "long with value" {
     var args = mkArgs(&.{ "bin", "--long=value" });
     defer args.deinit();
 
-    try t.expectEqualStrings("bin", args.nextValue().?);
+    try t.expectEqualStrings("bin", args.nextAsValue().?);
     try t.expectEqualDeep(Arg.Long{ .flag = "long", .value = "value" }, args.next().?.long);
     try t.expect(args.next() == null);
 }
@@ -348,7 +348,7 @@ test "long with value and equals" {
     var args = mkArgs(&.{ "bin", "--long=value=with=equals" });
     defer args.deinit();
 
-    try t.expectEqualStrings("bin", args.nextValue().?);
+    try t.expectEqualStrings("bin", args.nextAsValue().?);
     try t.expectEqualDeep(Arg.Long{ .flag = "long", .value = "value=with=equals" }, args.next().?.long);
     try t.expect(args.next() == null);
 }
@@ -357,7 +357,7 @@ test "long with empty value" {
     var args = mkArgs(&.{ "bin", "--long=" });
     defer args.deinit();
 
-    try t.expectEqualStrings("bin", args.nextValue().?);
+    try t.expectEqualStrings("bin", args.nextAsValue().?);
     try t.expectEqualDeep(Arg.Long{ .flag = "long", .value = "" }, args.next().?.long);
     try t.expect(args.next() == null);
 }
@@ -366,9 +366,9 @@ test "long with space separated value" {
     var args = mkArgs(&.{ "bin", "--long", "space" });
     defer args.deinit();
 
-    try t.expectEqualStrings("bin", args.nextValue().?);
+    try t.expectEqualStrings("bin", args.nextAsValue().?);
     try t.expectEqualDeep(Arg.Long{ .flag = "long" }, args.next().?.long);
-    try t.expectEqualStrings("space", args.nextValue().?);
+    try t.expectEqualStrings("space", args.nextAsValue().?);
     try t.expect(args.next() == null);
 }
 
@@ -376,7 +376,7 @@ test "single short" {
     var args = mkArgs(&.{ "bin", "-a" });
     defer args.deinit();
 
-    try t.expectEqualStrings("bin", args.nextValue().?);
+    try t.expectEqualStrings("bin", args.nextAsValue().?);
     try t.expectEqualDeep(Arg.Shorts{ .flags = "a" }, args.next().?.shorts);
     try t.expect(args.next() == null);
 }
@@ -385,7 +385,7 @@ test "combined shorts" {
     var args = mkArgs(&.{ "bin", "-abc" });
     defer args.deinit();
 
-    try t.expectEqualStrings("bin", args.nextValue().?);
+    try t.expectEqualStrings("bin", args.nextAsValue().?);
     try t.expectEqualDeep(Arg.Shorts{ .flags = "abc" }, args.next().?.shorts);
     try t.expect(args.next() == null);
 }
@@ -394,7 +394,7 @@ test "value" {
     var args = mkArgs(&.{ "bin", "value" });
     defer args.deinit();
 
-    try t.expectEqualStrings("bin", args.nextValue().?);
+    try t.expectEqualStrings("bin", args.nextAsValue().?);
     try t.expectEqualStrings("value", args.next().?.value);
     try t.expect(args.next() == null);
 }
@@ -403,10 +403,10 @@ test "combined long, shorts, and value" {
     var args = mkArgs(&.{ "bin", "--long=value", "-abc", "value" });
     defer args.deinit();
 
-    try t.expectEqualStrings("bin", args.nextValue().?);
+    try t.expectEqualStrings("bin", args.nextAsValue().?);
     try t.expectEqualDeep(Arg.Long{ .flag = "long", .value = "value" }, args.next().?.long);
     try t.expectEqualDeep(Arg.Shorts{ .flags = "abc" }, args.next().?.shorts);
-    try t.expectEqualStrings("value", args.nextValue().?);
+    try t.expectEqualStrings("value", args.nextAsValue().?);
     try t.expect(args.next() == null);
 }
 
@@ -414,7 +414,7 @@ test "peek" {
     var args = mkArgs(&.{ "bin", "a" });
     defer args.deinit();
 
-    try t.expectEqualStrings("bin", args.nextValue().?);
+    try t.expectEqualStrings("bin", args.nextAsValue().?);
     try t.expectEqualStrings("a", args.peek().?.value);
     try t.expectEqualStrings("a", args.peek().?.value);
     try t.expectEqualStrings("a", args.next().?.value);
@@ -423,15 +423,15 @@ test "peek" {
     try t.expect(args.next() == null);
 }
 
-test "nextValue" {
+test "nextAsValue" {
     var args = mkArgs(&.{ "bin", "--a", "-b", "--", "c" });
     defer args.deinit();
 
-    try t.expectEqualStrings("bin", args.nextValue().?);
-    try t.expectEqualStrings("--a", args.nextValue().?);
-    try t.expectEqualStrings("-b", args.nextValue().?);
-    try t.expectEqualStrings("--", args.nextValue().?);
-    try t.expectEqualStrings("c", args.nextValue().?);
+    try t.expectEqualStrings("bin", args.nextAsValue().?);
+    try t.expectEqualStrings("--a", args.nextAsValue().?);
+    try t.expectEqualStrings("-b", args.nextAsValue().?);
+    try t.expectEqualStrings("--", args.nextAsValue().?);
+    try t.expectEqualStrings("c", args.nextAsValue().?);
     try t.expect(args.next() == null);
 }
 
@@ -439,7 +439,7 @@ test "nextIfValue" {
     var args = mkArgs(&.{ "bin", "--a", "b", "--c", "--d" });
     defer args.deinit();
 
-    try t.expectEqualStrings("bin", args.nextValue().?);
+    try t.expectEqualStrings("bin", args.nextAsValue().?);
     try t.expectEqualDeep(Arg.Long{ .flag = "a" }, args.next().?.long);
     try t.expectEqualStrings("b", args.nextIfValue().?);
     try t.expectEqualDeep(Arg.Long{ .flag = "c" }, args.next().?.long);
@@ -452,7 +452,7 @@ test "skip" {
     var args = mkArgs(&.{ "bin", "--flag1", "value", "--flag2" });
     defer args.deinit();
 
-    try t.expectEqualStrings("bin", args.nextValue().?);
+    try t.expectEqualStrings("bin", args.nextAsValue().?);
     try t.expectEqualDeep(Arg.Long{ .flag = "flag1" }, args.next().?.long);
     try t.expectEqual(true, args.skip());
     try t.expectEqualDeep(Arg.Long{ .flag = "flag2" }, args.next().?.long);
@@ -483,7 +483,7 @@ test "reset" {
     var args = mkArgs(&.{ "bin", "a", "b", "c" });
     defer args.deinit();
 
-    try t.expectEqualStrings("bin", args.nextValue().?);
+    try t.expectEqualStrings("bin", args.nextAsValue().?);
     try t.expectEqualStrings("a", args.next().?.value);
     try t.expectEqualStrings("b", args.next().?.value);
     try t.expectEqualStrings("c", args.next().?.value);
@@ -491,7 +491,7 @@ test "reset" {
 
     args.reset();
 
-    try t.expectEqualStrings("bin", args.nextValue().?);
+    try t.expectEqualStrings("bin", args.nextAsValue().?);
     try t.expectEqualStrings("a", args.next().?.value);
     try t.expectEqualStrings("b", args.next().?.value);
     try t.expectEqualStrings("c", args.next().?.value);
@@ -504,7 +504,7 @@ test "EscapingArgs.next" {
 
     var escaping = args.handleEscape();
 
-    try t.expectEqualStrings("bin", escaping.nextValue().?);
+    try t.expectEqualStrings("bin", escaping.nextAsValue().?);
     try t.expectEqualDeep(Arg.Long{ .flag = "long" }, escaping.next().?.long);
     try t.expectEqualDeep(Arg.Shorts{ .flags = "x" }, escaping.next().?.shorts);
     try t.expectEqualStrings("value", escaping.next().?.value);
@@ -514,19 +514,19 @@ test "EscapingArgs.next" {
     try t.expect(escaping.next() == null);
 }
 
-test "EscapingArgs.nextValue" {
+test "EscapingArgs.nextAsValue" {
     var args = mkArgs(&.{ "bin", "--long", "-x", "value", "--", "--also", "-X", "another" });
     defer args.deinit();
 
     var escaping = args.handleEscape();
 
-    try t.expectEqualStrings("bin", escaping.nextValue().?);
-    try t.expectEqualStrings("--long", escaping.nextValue().?);
-    try t.expectEqualStrings("-x", escaping.nextValue().?);
-    try t.expectEqualStrings("value", escaping.nextValue().?);
-    try t.expectEqualStrings("--also", escaping.nextValue().?);
-    try t.expectEqualStrings("-X", escaping.nextValue().?);
-    try t.expectEqualStrings("another", escaping.nextValue().?);
+    try t.expectEqualStrings("bin", escaping.nextAsValue().?);
+    try t.expectEqualStrings("--long", escaping.nextAsValue().?);
+    try t.expectEqualStrings("-x", escaping.nextAsValue().?);
+    try t.expectEqualStrings("value", escaping.nextAsValue().?);
+    try t.expectEqualStrings("--also", escaping.nextAsValue().?);
+    try t.expectEqualStrings("-X", escaping.nextAsValue().?);
+    try t.expectEqualStrings("another", escaping.nextAsValue().?);
     try t.expect(escaping.next() == null);
 }
 
@@ -536,7 +536,7 @@ test "EscapingArgs.nextIfValue" {
 
     var escaping = args.handleEscape();
 
-    try t.expectEqualStrings("bin", escaping.nextValue().?);
+    try t.expectEqualStrings("bin", escaping.nextAsValue().?);
     try t.expectEqual(null, escaping.nextIfValue());
     try t.expect(escaping.skip()); // --long
     try t.expectEqual(null, escaping.nextIfValue());

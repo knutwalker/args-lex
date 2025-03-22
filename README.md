@@ -71,7 +71,7 @@ pub fn main() !void {
 
     while (args.next()) |arg| {
         switch (arg.*) {
-            .escape => while (args.nextValue()) |value| {
+            .escape => while (args.nextAsValue()) |value| {
                 std.debug.print("POSITIONAL: {s}\n", .{value});
             },
             .shorts => |*shorts| while (shorts.next()) |short| switch (short) {
@@ -146,7 +146,7 @@ pub fn main() !void {
     inline for (&args_impls) |*args| {
 
         // Skip the binary name
-        _ = args.nextValue().?;
+        _ = args.nextAsValue().?;
 
         // Initialize the result type with all defaults.
         // If some args are required, they need to be wrapped in an option
@@ -168,7 +168,7 @@ pub fn main() !void {
                     defer remainder.deinit();
 
                     // `nextValue` will return the next args without any parsing
-                    while (args.nextValue()) |arg_value| {
+                    while (args.nextAsValue()) |arg_value| {
                         // The slices returned by any "value" like access are
                         // invalidated when `deinit` is called.
                         // It is recommended to `dupe` any slice that should
@@ -232,11 +232,11 @@ pub fn main() !void {
                         // also be allowed. We can use `nextValue` to take the next
                         // argument as value, no matter how it looks.
                         // Here, the flag also requires a value.
-                        const value = long.value orelse (args.nextValue() orelse return error.MissingValue);
+                        const value = long.value orelse (args.nextAsValue() orelse return error.MissingValue);
                         options.long = try alloc.dupeZ(u8, value);
                     } else if (std.mem.eql(u8, long.flag, "also")) {
                         // Here, the flag has an optional value.
-                        const value = long.value orelse args.nextValue();
+                        const value = long.value orelse args.nextAsValue();
                         // If there is a value, we can validate it.
                         // Here, we only allow values that are enum tags.
                         // A missing value will default to the `.auto` option.

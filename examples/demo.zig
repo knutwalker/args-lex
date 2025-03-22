@@ -13,7 +13,7 @@ pub fn main() !void {
 
     while (args.next()) |arg| {
         switch (arg.*) {
-            .escape => while (args.nextValue()) |value| {
+            .escape => while (args.nextAsValue()) |value| {
                 std.debug.print("POSITIONAL: {s}\n", .{value});
             },
             .shorts => |*shorts| while (shorts.next()) |short| switch (short) {
