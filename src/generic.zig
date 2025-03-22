@@ -118,9 +118,7 @@ pub fn GenericArgs(comptime Iter: type) type {
 
         /// Return the next arg as a value, even if it looks like a flag.
         pub fn nextAsValue(self: *Self) ?[:0]const u8 {
-            if (self.peeked == null) {
-                return self.iter.next();
-            }
+            _ = self.peek() orelse return null;
             defer self.peeked = null;
             return self.peeked.?.raw;
         }
