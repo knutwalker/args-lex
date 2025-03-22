@@ -379,27 +379,87 @@ pub const Arg = union(enum) {
         }
     }
 
+    /// Renders the argument.
+    /// How and what exactly is rendered depends on the format string specifier.
+    ///
+    /// THe default format (empty specifier) renders a textual representation
+    /// of the argument, close to how it would have been provided as a command
+    /// line argument.
+    ///
+    /// In addition, the following specifiers are supported:
+    /// - `s`: renders the short flags
+    /// - `l`: renders the name of the long flag (not its value)
+    /// - `v`: renders a positional argument or the value of a long flag
+    /// - `e`: renders the escape string
+    ///
+    /// If the argument does not match the specifier (e.g. `s` is used, but the
+    /// argument is a long flag), nothing is rendered.
+    ///
+    /// Furthermore, the `s` and `l` specifiers can be used to only render the
+    /// _value_ of a flag:
+    /// - `s<flag>`: renders the value of the short flag `<flag>`, e.g.
+    ///     `sv` render the value of the short flag `-v`.
+    /// - `l<flag>`: renders the value of the short flag `<flag>`, e.g.
+    ///     `lverbose` render the value of the long flag `--verbose`.
     pub fn fmt(arg: *const Arg) std.fmt.Formatter(print) {
         return .{ .data = arg };
     }
 
     pub fn print(arg: *const Arg, comptime template: []const u8, opts: std.fmt.FormatOptions, writer: anytype) !void {
-        _ = .{ template, opts };
-        switch (arg.*) {
-            .shorts => |s| {
-                try writer.print("-{s}", .{s.flags});
-            },
-            .long => |l| {
-                if (l.value) |lv| {
-                    try writer.print("--{s}={s}", .{ l.flag, lv });
-                } else {
-                    try writer.print("--{s}", .{l.flag});
-                }
-            },
-            .value => |v| {
-                try writer.writeAll(v);
-            },
-            .escape => try writer.writeAll("--"),
+        if (comptime std.mem.eql(u8, template, "")) {
+            switch (arg.*) {
+                .shorts => |s| try writer.print("-{s}", .{s.flags}),
+                .long => |l| if (l.value) |lv|
+                    try writer.print("--{s}={s}", .{ l.flag, lv })
+                else
+                    try writer.print("--{s}", .{l.flag}),
+                .value => |v| try writer.writeAll(v),
+                .escape => try writer.writeAll("--"),
+            }
+        } else if (comptime std.mem.eql(u8, template, "s")) {
+            // render name of short flag
+            switch (arg.*) {
+                .shorts => |s| try std.fmt.formatBuf(s.flags, opts, writer),
+                else => {},
+            }
+        } else if (comptime std.mem.eql(u8, template, "l")) {
+            // render name of long flag
+            switch (arg.*) {
+                .long => |l| try std.fmt.formatBuf(l.flag, opts, writer),
+                else => {},
+            }
+        } else if (comptime std.mem.startsWith(u8, template, "s")) {
+            // render value of long flag
+            comptime var utf8 = std.unicode.Utf8View.initComptime(template[1..]).iterator();
+            const flag = comptime utf8.nextCodepoint() orelse unreachable;
+            if (comptime utf8.nextCodepoint() != null) {
+                @compileError("expected only one flag name");
+            }
+
+            if (arg.valueOf(.{flag}, null)) |value| {
+                try std.fmt.formatBuf(value, opts, writer);
+            }
+        } else if (comptime std.mem.startsWith(u8, template, "l")) {
+            // render value of short flag
+            const flag_name = template[1..];
+            if (arg.valueOf(.{flag_name}, null)) |value| {
+                try std.fmt.formatBuf(value, opts, writer);
+            }
+        } else if (comptime std.mem.eql(u8, template, "v")) {
+            // render value
+            switch (arg.*) {
+                .long => |l| if (l.value) |lv| try std.fmt.formatBuf(lv, opts, writer),
+                .value => |v| try std.fmt.formatBuf(v, opts, writer),
+                else => {},
+            }
+        } else if (comptime std.mem.eql(u8, template, "e")) {
+            // render escape
+            switch (arg.*) {
+                .escape => try std.fmt.formatBuf("--", opts, writer),
+                else => {},
+            }
+        } else {
+            @compileError("unsupported format string '" ++ template ++ "'");
         }
     }
 
@@ -761,6 +821,16 @@ pub const Arg = union(enum) {
         try expect(null, value_arg.parse(i32, .{'a'}, null));
     }
 
+    test fmt {
+        const arg = Arg{ .long = .{ .flag = "verbose", .value = "true" } };
+
+        try t.expectFmt("--verbose=true", "{}", .{arg.fmt()});
+        try t.expectFmt("verbose", "{l}", .{arg.fmt()});
+        try t.expectFmt("", "{s}", .{arg.fmt()});
+        try t.expectFmt("true", "{v}", .{arg.fmt()});
+        try t.expectFmt("true", "{lverbose}", .{arg.fmt()});
+    }
+
     test "render" {
         const value_arg = Arg{ .value = "42" };
         try t.expectFmt("42", "{}", .{value_arg.fmt()});
@@ -776,6 +846,108 @@ pub const Arg = union(enum) {
 
         const escape_arg = Arg{ .escape = {} };
         try t.expectFmt("--", "{}", .{escape_arg.fmt()});
+    }
+
+    test "render short flag" {
+        const value_arg = Arg{ .value = "42" };
+        try t.expectFmt("", "{s}", .{value_arg.fmt()});
+
+        const short_arg = Arg{ .shorts = .{ .flags = "a42" } };
+        try t.expectFmt("a42", "{s}", .{short_arg.fmt()});
+
+        const long_arg = Arg{ .long = .{ .flag = "a", .value = null } };
+        try t.expectFmt("", "{s}", .{long_arg.fmt()});
+
+        const long_arg_with_value = Arg{ .long = .{ .flag = "a", .value = "42" } };
+        try t.expectFmt("", "{s}", .{long_arg_with_value.fmt()});
+
+        const escape_arg = Arg{ .escape = {} };
+        try t.expectFmt("", "{s}", .{escape_arg.fmt()});
+    }
+
+    test "render value of short flag" {
+        const value_arg = Arg{ .value = "42" };
+        try t.expectFmt("", "{sa}", .{value_arg.fmt()});
+
+        const short_arg = Arg{ .shorts = .{ .flags = "a42" } };
+        try t.expectFmt("42", "{sa}", .{short_arg.fmt()});
+
+        const long_arg = Arg{ .long = .{ .flag = "a", .value = null } };
+        try t.expectFmt("", "{sa}", .{long_arg.fmt()});
+
+        const long_arg_with_value = Arg{ .long = .{ .flag = "a", .value = "42" } };
+        try t.expectFmt("", "{sa}", .{long_arg_with_value.fmt()});
+
+        const escape_arg = Arg{ .escape = {} };
+        try t.expectFmt("", "{sa}", .{escape_arg.fmt()});
+    }
+
+    test "render long flag" {
+        const value_arg = Arg{ .value = "42" };
+        try t.expectFmt("", "{l}", .{value_arg.fmt()});
+
+        const short_arg = Arg{ .shorts = .{ .flags = "a42" } };
+        try t.expectFmt("", "{l}", .{short_arg.fmt()});
+
+        const long_arg = Arg{ .long = .{ .flag = "a", .value = null } };
+        try t.expectFmt("a", "{l}", .{long_arg.fmt()});
+
+        const long_arg_with_value = Arg{ .long = .{ .flag = "a", .value = "42" } };
+        try t.expectFmt("a", "{l}", .{long_arg_with_value.fmt()});
+
+        const escape_arg = Arg{ .escape = {} };
+        try t.expectFmt("", "{l}", .{escape_arg.fmt()});
+    }
+
+    test "render value of long flag" {
+        const value_arg = Arg{ .value = "42" };
+        try t.expectFmt("", "{la}", .{value_arg.fmt()});
+
+        const short_arg = Arg{ .shorts = .{ .flags = "a42" } };
+        try t.expectFmt("", "{la}", .{short_arg.fmt()});
+
+        const long_arg = Arg{ .long = .{ .flag = "a", .value = null } };
+        try t.expectFmt("", "{la}", .{long_arg.fmt()});
+
+        const long_arg_with_value = Arg{ .long = .{ .flag = "a", .value = "42" } };
+        try t.expectFmt("42", "{la}", .{long_arg_with_value.fmt()});
+
+        const escape_arg = Arg{ .escape = {} };
+        try t.expectFmt("", "{la}", .{escape_arg.fmt()});
+    }
+
+    test "render value" {
+        const value_arg = Arg{ .value = "42" };
+        try t.expectFmt("42", "{v}", .{value_arg.fmt()});
+
+        const short_arg = Arg{ .shorts = .{ .flags = "a42" } };
+        try t.expectFmt("", "{v}", .{short_arg.fmt()});
+
+        const long_arg = Arg{ .long = .{ .flag = "a", .value = null } };
+        try t.expectFmt("", "{v}", .{long_arg.fmt()});
+
+        const long_arg_with_value = Arg{ .long = .{ .flag = "a", .value = "42" } };
+        try t.expectFmt("42", "{v}", .{long_arg_with_value.fmt()});
+
+        const escape_arg = Arg{ .escape = {} };
+        try t.expectFmt("", "{v}", .{escape_arg.fmt()});
+    }
+
+    test "render escape" {
+        const value_arg = Arg{ .value = "42" };
+        try t.expectFmt("", "{e}", .{value_arg.fmt()});
+
+        const short_arg = Arg{ .shorts = .{ .flags = "a42" } };
+        try t.expectFmt("", "{e}", .{short_arg.fmt()});
+
+        const long_arg = Arg{ .long = .{ .flag = "a", .value = null } };
+        try t.expectFmt("", "{e}", .{long_arg.fmt()});
+
+        const long_arg_with_value = Arg{ .long = .{ .flag = "a", .value = "42" } };
+        try t.expectFmt("", "{e}", .{long_arg_with_value.fmt()});
+
+        const escape_arg = Arg{ .escape = {} };
+        try t.expectFmt("--", "{e}", .{escape_arg.fmt()});
     }
 };
 
