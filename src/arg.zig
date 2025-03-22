@@ -4,7 +4,7 @@
 /// An `Arg` does not own any memory and can be `memcpy`d.
 pub const Arg = union(enum) {
     /// The special value `"--"`. Encountering this value does not have any special effect.
-    /// To escape any following arguments from the parser, use `nextValue` instead of `next`.
+    /// To escape any following arguments from the parser, use `nextAsValue` instead of `next`.
     escape,
     /// A long flag with an optional value (`"--long[=value]"`).
     long: Long,
@@ -143,7 +143,7 @@ pub const Arg = union(enum) {
     /// or null if it doesn't match.
     ///
     /// If the argument itself does not provide a value, but the type requires
-    /// one, `args.nextValue()` is called on the provided `args`, expecting
+    /// one, `args.nextAsValue()` is called on the provided `args`, expecting
     /// it to return a `[:0]const u8`, which should be the outer args iterator
     /// (likely passed by taking a reference).
     /// This value can also be `{}` (void) or `null` if you want to opt-out of

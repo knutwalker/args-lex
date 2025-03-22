@@ -170,7 +170,7 @@ pub fn main() !void {
                     var remainder = std.ArrayList([:0]const u8).init(alloc);
                     defer remainder.deinit();
 
-                    // `nextValue` will return the next args without any parsing
+                    // `nextAsValue` will return the next args without any parsing
                     while (args.nextAsValue()) |arg_value| {
                         // The slices returned by any "value" like access are
                         // invalidated when `deinit` is called.
@@ -233,7 +233,7 @@ pub fn main() !void {
                     } else if (std.mem.eql(u8, long.flag, "long")) {
                         // the provided `value` is only set if it was given using the
                         // `--flag=value` syntax, but often `--flag value` should
-                        // also be allowed. We can use `nextValue` to take the next
+                        // also be allowed. We can use `nextAsValue` to take the next
                         // argument as value, no matter how it looks.
                         // Here, the flag also requires a value.
                         const value = long.value orelse (args.nextAsValue() orelse return error.MissingValue);
