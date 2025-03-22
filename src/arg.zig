@@ -108,7 +108,7 @@ pub const Arg = union(enum) {
     /// The provided `flags` is a tuple of either short flag chars or
     /// long flag strings, both *without* their leading `-`
     /// ,e.g. `.{ "help", 'h' }`
-    pub fn isFlag(self: *const Arg, flags: anytype) bool {
+    pub fn isFlag(self: Arg, flags: anytype) bool {
         return self.parse(bool, flags, null) orelse false catch false;
     }
 
@@ -130,10 +130,10 @@ pub const Arg = union(enum) {
     /// The provided `flags` is a tuple of either short flag chars or
     /// long flag strings, both *without* their leading `-`
     /// ,e.g. `.{ "help", 'h' }`
-    pub fn flagOf(self: *const Arg, flags: anytype) ?(FlagError!Kind) {
+    pub fn flagOf(self: Arg, flags: anytype) ?(FlagError!Kind) {
         validateFlags(flags);
 
-        switch (self.*) {
+        switch (self) {
             .shorts => |shorts| {
                 var sh = shorts;
                 while (sh.nextFlag()) |s| {
@@ -181,11 +181,9 @@ pub const Arg = union(enum) {
     /// The provided `flags` is a tuple of either short flag chars or
     /// long flag strings, both *without* their leading `-`
     /// ,e.g. `.{ "help", 'h' }`
-    pub fn valueOf(self: *const Arg, flags: anytype, args: anytype) ?ArgValue {
-        validateFlags(flags);
-
+    pub fn valueOf(self: Arg, flags: anytype, args: anytype) ?ArgValue {
         const value = self.parse(?[:0]const u8, flags, args) orelse return null;
-        return switch (self.*) {
+        return switch (self) {
             .shorts => .{ .short = value catch unreachable },
             .long => .{ .long = value catch unreachable },
             else => unreachable,
@@ -238,10 +236,10 @@ pub const Arg = union(enum) {
     /// The provided `flags` is a tuple of either short flag chars or
     /// long flag strings, both *without* their leading `-`
     /// ,e.g. `.{ "help", 'h' }`
-    pub fn parse(self: *const Arg, R: type, flags: anytype, args: anytype) ?(ParseError!R) {
+    pub fn parse(self: Arg, R: type, flags: anytype, args: anytype) ?(ParseError!R) {
         validateFlags(flags);
 
-        switch (self.*) {
+        switch (self) {
             .shorts => |shorts| {
                 var sh = shorts;
                 while (sh.nextFlag()) |s| {
