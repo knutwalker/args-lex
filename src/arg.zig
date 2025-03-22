@@ -190,7 +190,7 @@ pub const Arg = union(enum) {
     /// delimiter, parse as `[]const u8` and do the parsing on your side.
     ///
     /// If the argument itself does not provide a value, but the type requires
-    /// one, `args.nextValue()` is called on the provided `args`, expecting
+    /// one, `args.nextAsValue()` is called on the provided `args`, expecting
     /// it to return a `[:0]const u8`, which should be the outer args iterator
     /// (likely passed by taking a reference).
     /// This value can also be `{}` (void) or `null` if you want to opt-out of
@@ -315,7 +315,7 @@ pub const Arg = union(enum) {
     fn nextValue(args: anytype) ?[:0]const u8 {
         switch (@typeInfo(@TypeOf(args))) {
             .void, .null => return null,
-            else => return args.nextValue(),
+            else => return args.nextAsValue(),
         }
     }
 
