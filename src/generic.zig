@@ -47,12 +47,13 @@ pub fn verifyIter(comptime Iter: type) void {
 /// The `Iter` type returns the next command line argument.
 /// Any quoting, e.g. turning `"foo bar"` into a single argument must be done
 /// by the Iter implementation.
-pub fn GenericArgs(comptime Iter: type) type {
+pub fn GenericArgs(comptime Iter: type, comptime handle_escape: bool) type {
     comptime verifyIter(Iter);
 
     return struct {
         iter: Iter,
         peeked: ?RawArg = null,
+        has_seen_escape: if (handle_escape) bool else void = if (handle_escape) false else {},
 
         const Self = @This();
         pub const Inner = Iter;
@@ -97,7 +98,19 @@ pub fn GenericArgs(comptime Iter: type) type {
         pub fn peek(self: *Self) ?Arg {
             if (self.peeked == null) {
                 const next_raw = self.iter.next() orelse return null;
-                const next_arg = parse(next_raw);
+                const next_arg: Arg = if (comptime handle_escape) arg: {
+                    if (self.has_seen_escape) {
+                        break :arg .{ .value = next_raw };
+                    } else {
+                        const next_arg = parse(next_raw);
+                        if (next_arg == .escape) {
+                            self.has_seen_escape = true;
+                            return self.peek();
+                        }
+                        break :arg next_arg;
+                    }
+                } else parse(next_raw);
+
                 self.peeked = .{ .arg = next_arg, .raw = next_raw };
             }
             return self.peeked.?.arg;
@@ -141,9 +154,16 @@ pub fn GenericArgs(comptime Iter: type) type {
             return self.nextAsValue() != null;
         }
 
-        /// Wraps the args lexer in an iterator that handles the `--` escape sequence.
-        pub fn handleEscape(self: Self) EscapingArgs(Iter) {
-            return .{ .inner = self };
+        /// Reconfigure this args lexer to handle the `--` escape sequence.
+        pub fn handleEscape(self: Self) GenericArgs(Iter, true) {
+            if (comptime handle_escape) return self;
+            return .{ .iter = self.iter, .peeked = self.peeked, .has_seen_escape = false };
+        }
+
+        /// Reconfigure this args lexer to yield the `--` escape sequence as `.escape`.
+        pub fn yieldEscape(self: Self) GenericArgs(Iter, false) {
+            if (!handle_escape) return self;
+            return .{ .iter = self.iter, .peeked = self.peeked };
         }
 
         fn parse(arg: [:0]const u8) Arg {
@@ -178,117 +198,6 @@ pub fn GenericArgs(comptime Iter: type) type {
     };
 }
 
-/// A wrapper over `GenericArgs` with the same API that will
-/// handle the `--` esscape sequence.
-pub fn EscapingArgs(comptime Iter: type) type {
-    return struct {
-        inner: GenericArgs(Iter),
-        has_seen_escape: bool = false,
-        value_arg: ?Arg = null,
-
-        const Self = @This();
-        pub const Inner = Iter;
-
-        /// Free the internal iterator's buffers.
-        /// Invalidates all slices and pointers returned from this Args.
-        pub fn deinit(self: *Self) void {
-            self.inner.deinit();
-        }
-
-        /// Reset the underlying iterator, if it is supported.
-        pub fn reset(self: *Self) void {
-            self.inner.reset();
-        }
-
-        /// Peek at the next `Arg` without consuming it.
-        /// Repeated calls will return the same `Arg`.
-        /// Calling any form of `next` will invalidate this pointer.
-        /// However, calling `peek` will *not* invalidate a pointer
-        /// returned from `next`.
-        /// `.escape` is not handled by peek, it can still be observed.
-        /// This is because peeking at an item is not consuming it,
-        /// and the escape handling only happens after the escape token
-        /// is consumed.
-        pub fn peek(self: *Self) ?Arg {
-            return self.inner.peek();
-        }
-
-        /// Return the next `Arg`.
-        /// Calling this will invalidate any pointer previously returned
-        /// from any `next` or `peek` method.
-        ///
-        /// This will never return `.escape`.
-        /// After having seen that escape token internally, all remaining
-        /// args are returned as `.value`.
-        pub fn next(self: *Self) ?Arg {
-            if (self.has_seen_escape) {
-                const val = self.inner.nextAsValue() orelse return null;
-                self.value_arg = Arg{ .value = val };
-                return self.value_arg.?;
-            }
-            const ret = self.inner.next() orelse return null;
-            if (ret == .escape) {
-                self.has_seen_escape = true;
-                return self.next();
-            } else {
-                return ret;
-            }
-        }
-
-        /// Return the next arg as a value, even if it looks like a flag.
-        /// Calling this will invalidate any pointer returned from `peek`,
-        /// but will not invalidate pointers returned from other `next` methods.
-        ///
-        /// This will never return `.escape`.
-        /// After having seen that escape token internally, all remaining
-        /// args are returned as `.value`.
-        pub fn nextAsValue(self: *Self) ?[:0]const u8 {
-            if (self.has_seen_escape) {
-                return self.inner.nextAsValue();
-            }
-            const peeked = self.peek() orelse return null;
-            if (peeked == .escape) {
-                self.has_seen_escape = true;
-                _ = self.skip();
-            }
-            return self.inner.nextAsValue();
-        }
-
-        /// Returns the next args only if it is a value.
-        /// Calling this will invalidate any pointer returned from `peek`,
-        /// and non-null return values will invalidate any pointer returned
-        /// from any `next` method.
-        ///
-        /// This will never return `.escape`.
-        /// After having seen that escape token internally, all remaining
-        /// args are returned as `.value`.
-        pub fn nextIfValue(self: *Self) ?[:0]const u8 {
-            if (self.has_seen_escape) {
-                return self.inner.nextAsValue();
-            }
-            const peeked = self.peek() orelse return null;
-            if (peeked == .escape) {
-                self.has_seen_escape = true;
-                _ = self.skip();
-                return self.inner.nextAsValue();
-            }
-            return self.inner.nextIfValue();
-        }
-
-        /// Skips to next argument without parsing it.
-        /// Returns true if an argument was skipped,
-        /// false if there are no more arguments.
-        pub fn skip(self: *Self) bool {
-            return self.inner.skip();
-        }
-
-        /// Returns the last argument that had been returned from `next` as
-        /// a plain value.
-        pub fn lastAsValue(self: *const Self) ?[:0]const u8 {
-            return self.inner.lastAsValue();
-        }
-    };
-}
 const t = std.testing;
 const mkArgs = @import("args.zig").SliceArgs.init;
 
@@ -301,8 +210,16 @@ test "stdio" {
     try t.expect(args.next() == null);
 }
 
-test "escape" {
+test "handles escape" {
     var args = mkArgs(&.{ "bin", "--" });
+    defer args.deinit();
+
+    try t.expectEqualStrings("bin", args.nextAsValue().?);
+    try t.expect(args.next() == null);
+}
+
+test "yields escape" {
+    var args = mkArgs(&.{ "bin", "--" }).yieldEscape();
     defer args.deinit();
 
     try t.expectEqualStrings("bin", args.nextAsValue().?);
@@ -414,7 +331,6 @@ test "nextAsValue" {
     try t.expectEqualStrings("bin", args.nextAsValue().?);
     try t.expectEqualStrings("--a", args.nextAsValue().?);
     try t.expectEqualStrings("-b", args.nextAsValue().?);
-    try t.expectEqualStrings("--", args.nextAsValue().?);
     try t.expectEqualStrings("c", args.nextAsValue().?);
     try t.expect(args.next() == null);
 }
@@ -463,7 +379,7 @@ test "reset" {
     try t.expect(args.next() == null);
 }
 
-test "EscapingArgs.next" {
+test "handles escapes: next" {
     var args = mkArgs(&.{ "bin", "--long", "-x", "value", "--", "--also", "-X", "another" });
     defer args.deinit();
 
@@ -479,7 +395,7 @@ test "EscapingArgs.next" {
     try t.expect(escaping.next() == null);
 }
 
-test "EscapingArgs.nextAsValue" {
+test "handles escapes: nextAsValue" {
     var args = mkArgs(&.{ "bin", "--long", "-x", "value", "--", "--also", "-X", "another" });
     defer args.deinit();
 
@@ -495,7 +411,7 @@ test "EscapingArgs.nextAsValue" {
     try t.expect(escaping.next() == null);
 }
 
-test "EscapingArgs.nextIfValue" {
+test "handles escapes: nextIfValue" {
     var args = mkArgs(&.{ "bin", "--long", "-x", "value", "--", "--also", "-X", "another" });
     defer args.deinit();
 
@@ -509,6 +425,59 @@ test "EscapingArgs.nextIfValue" {
     try t.expectEqualStrings("value", escaping.nextIfValue().?);
     try t.expectEqualStrings("--also", escaping.nextIfValue().?);
     try t.expectEqualStrings("-X", escaping.nextIfValue().?);
+    try t.expectEqualStrings("another", escaping.nextIfValue().?);
+    try t.expect(escaping.next() == null);
+}
+
+test "yields escapes: next" {
+    var args = mkArgs(&.{ "bin", "--long", "-x", "value", "--", "--also", "-X", "another" });
+    defer args.deinit();
+
+    var escaping = args.yieldEscape();
+
+    try t.expectEqualStrings("bin", escaping.nextAsValue().?);
+    try t.expectEqualDeep(Arg.Long{ .flag = "long" }, escaping.next().?.long);
+    try t.expectEqualDeep(Arg.Shorts{ .flags = "x" }, escaping.next().?.shorts);
+    try t.expectEqualStrings("value", escaping.next().?.value);
+    try t.expectEqualDeep(.escape, escaping.next().?);
+    try t.expectEqualDeep(Arg.Long{ .flag = "also" }, escaping.next().?.long);
+    try t.expectEqualDeep(Arg.Shorts{ .flags = "X" }, escaping.next().?.shorts);
+    try t.expectEqualStrings("another", escaping.next().?.value);
+    try t.expect(escaping.next() == null);
+}
+
+test "yields escapes: nextAsValue" {
+    var args = mkArgs(&.{ "bin", "--long", "-x", "value", "--", "--also", "-X", "another" });
+    defer args.deinit();
+
+    var escaping = args.yieldEscape();
+
+    try t.expectEqualStrings("bin", escaping.nextAsValue().?);
+    try t.expectEqualStrings("--long", escaping.nextAsValue().?);
+    try t.expectEqualStrings("-x", escaping.nextAsValue().?);
+    try t.expectEqualStrings("value", escaping.nextAsValue().?);
+    try t.expectEqualDeep(.escape, escaping.next().?);
+    try t.expectEqualDeep(Arg.Long{ .flag = "also" }, escaping.next().?.long);
+    try t.expectEqualDeep(Arg.Shorts{ .flags = "X" }, escaping.next().?.shorts);
+    try t.expectEqualStrings("another", escaping.nextAsValue().?);
+    try t.expect(escaping.next() == null);
+}
+
+test "yields escapes: nextIfValue" {
+    var args = mkArgs(&.{ "bin", "--long", "-x", "value", "--", "--also", "-X", "another" });
+    defer args.deinit();
+
+    var escaping = args.yieldEscape();
+
+    try t.expectEqualStrings("bin", escaping.nextAsValue().?);
+    try t.expectEqual(null, escaping.nextIfValue());
+    try t.expect(escaping.skip()); // --long
+    try t.expectEqual(null, escaping.nextIfValue());
+    try t.expect(escaping.skip()); // --x
+    try t.expectEqualStrings("value", escaping.nextIfValue().?);
+    try t.expect(escaping.skip()); // --
+    try t.expect(escaping.skip()); // --also
+    try t.expect(escaping.skip()); // -X
     try t.expectEqualStrings("another", escaping.nextIfValue().?);
     try t.expect(escaping.next() == null);
 }

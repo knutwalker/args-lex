@@ -7,7 +7,6 @@ pub const OsArgs = @import("args.zig").OsArgs;
 pub const StringArgs = @import("args.zig").StringArgs;
 pub const GeneralArgs = @import("args.zig").GeneralArgs;
 pub const GenericArgs = @import("args.zig").GenericArgs;
-pub const EscapingArgs = @import("generic.zig").EscapingArgs;
 pub const ParseError = Arg.ParseError;
 
 test "force analysis" {

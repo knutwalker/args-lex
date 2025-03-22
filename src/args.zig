@@ -6,7 +6,7 @@ pub const GenericArgs = @import("generic.zig").GenericArgs;
 /// Allocations only happen on Windows and WASI.
 /// On POSIX systems, `initPosix` can be used without an `Allocator`.
 pub const Args = struct {
-    pub const Iter = GenericArgs(std.process.ArgIterator);
+    pub const Iter = GenericArgs(std.process.ArgIterator, true);
 
     /// Create a new Args lexer using `std.process.argsWithAllocator`.
     /// No other internal allocations are done.
@@ -30,7 +30,7 @@ pub const Args = struct {
 
 /// An args lexer over a provided string, including basic parsing and quoting.
 pub const StringArgs = struct {
-    pub const Iter = GenericArgs(std.process.ArgIteratorGeneral(.{}));
+    pub const Iter = GenericArgs(std.process.ArgIteratorGeneral(.{}), true);
 
     /// Create a new lexer using `std.process.ArgIteratorGeneral.init`,
     /// using the default configuration.
@@ -46,7 +46,7 @@ pub const StringArgs = struct {
 /// This could be use to parse args from a file.
 pub fn GeneralArgs(comptime options: std.process.ArgIteratorGeneralOptions) type {
     return struct {
-        pub const Iter = GenericArgs(std.process.ArgIteratorGeneral(options));
+        pub const Iter = GenericArgs(std.process.ArgIteratorGeneral(options), true);
 
         /// Create a new lexer using `std.process.ArgIteratorGeneral.init`,
         /// using the provided configuration.
@@ -77,7 +77,7 @@ pub const SliceArgs = struct {
         }
     };
 
-    pub const Iter = GenericArgs(SliceIter);
+    pub const Iter = GenericArgs(SliceIter, true);
 
     /// Create a new lexer using the given args.
     /// Does not take ownership over args.
@@ -105,7 +105,7 @@ pub const OsArgs = struct {
         }
     };
 
-    pub const Iter = GenericArgs(OsIter);
+    pub const Iter = GenericArgs(OsIter, true);
 
     pub fn isSupported() bool {
         const builtin = @import("builtin");
