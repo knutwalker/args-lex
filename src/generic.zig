@@ -102,14 +102,14 @@ pub fn GenericArgs(comptime Iter: type, comptime handle_escape: bool) type {
                     if (self.has_seen_escape) {
                         break :arg .{ .value = next_raw };
                     } else {
-                        const next_arg = parse(next_raw);
+                        const next_arg = parseArg(next_raw);
                         if (next_arg == .escape) {
                             self.has_seen_escape = true;
                             return self.peek();
                         }
                         break :arg next_arg;
                     }
-                } else parse(next_raw);
+                } else parseArg(next_raw);
 
                 self.peeked = .{ .arg = next_arg, .raw = next_raw };
             }
@@ -154,19 +154,7 @@ pub fn GenericArgs(comptime Iter: type, comptime handle_escape: bool) type {
             return self.nextAsValue() != null;
         }
 
-        /// Reconfigure this args lexer to handle the `--` escape sequence.
-        pub fn handleEscape(self: Self) GenericArgs(Iter, true) {
-            if (comptime handle_escape) return self;
-            return .{ .iter = self.iter, .peeked = self.peeked, .has_seen_escape = false };
-        }
-
-        /// Reconfigure this args lexer to yield the `--` escape sequence as `.escape`.
-        pub fn yieldEscape(self: Self) GenericArgs(Iter, false) {
-            if (!handle_escape) return self;
-            return .{ .iter = self.iter, .peeked = self.peeked };
-        }
-
-        fn parse(arg: [:0]const u8) Arg {
+        fn parseArg(arg: [:0]const u8) Arg {
             if (std.mem.startsWith(u8, arg, "--")) {
                 const long_arg = arg[2..];
                 if (long_arg.len == 0) {
@@ -189,6 +177,18 @@ pub fn GenericArgs(comptime Iter: type, comptime handle_escape: bool) type {
             }
 
             return .{ .value = arg };
+        }
+
+        /// Reconfigure this args lexer to handle the `--` escape sequence.
+        pub fn handleEscape(self: Self) GenericArgs(Iter, true) {
+            if (comptime handle_escape) return self;
+            return .{ .iter = self.iter, .peeked = self.peeked, .has_seen_escape = false };
+        }
+
+        /// Reconfigure this args lexer to yield the `--` escape sequence as `.escape`.
+        pub fn yieldEscape(self: Self) GenericArgs(Iter, false) {
+            if (!handle_escape) return self;
+            return .{ .iter = self.iter, .peeked = self.peeked };
         }
 
         const RawArg = struct {
