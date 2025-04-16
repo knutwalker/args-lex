@@ -57,7 +57,7 @@ pub fn build(b: *std.Build) void {
     // }}}
 
     // tests {{{
-    const tests = b.addTest(.{ .root_module = mod });
+    const tests = b.addTest(.{ .root_module = mod, .name = Manifest.lib_name });
     const run_tests = b.addRunArtifact(tests);
     test_step.dependOn(&run_tests.step);
     // }}}
