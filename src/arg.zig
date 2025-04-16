@@ -3,15 +3,17 @@
 /// A single Arg. See the docs for each variant for details.
 /// An `Arg` does not own any memory and can be `memcpy`d.
 pub const Arg = union(enum) {
-    /// The special value `"--"`. Encountering this value does not have any special effect.
-    /// To escape any following arguments from the parser, use `nextAsValue` instead of `next`.
-    escape,
     /// A long flag with an optional value (`"--long[=value]"`).
     long: Long,
     /// A collection for short flags ("-short").
     shorts: Shorts,
     /// A free-standing value, which could be a subcommand or a positional argument.
     value: [:0]const u8,
+    /// The special value `"--"`. Encountering this value does not have any special effect.
+    /// To escape any following arguments from the parser, use `nextAsValue` instead of `next`.
+    ///
+    /// This value is only emitted if `GenericArgs` is configured to `yieldEscape`.
+    escape,
 
     pub const Long = struct {
         flag: []const u8,
