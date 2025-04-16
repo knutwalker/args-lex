@@ -5,6 +5,8 @@ pub const GenericArgs = @import("generic.zig").GenericArgs;
 /// An args lexer over `argv` of the process.
 /// Allocations only happen on Windows and WASI.
 /// On POSIX systems, `initPosix` can be used without an `Allocator`.
+///
+/// See `GenericArgs` for the implementation type and methods.
 pub const Args = struct {
     pub const Iter = GenericArgs(std.process.ArgIterator, true);
 
@@ -29,6 +31,8 @@ pub const Args = struct {
 };
 
 /// An args lexer over a provided string, including basic parsing and quoting.
+///
+/// See `GenericArgs` for the implementation type and methods.
 pub const StringArgs = struct {
     pub const Iter = GenericArgs(std.process.ArgIteratorGeneral(.{}), true);
 
@@ -44,6 +48,8 @@ pub const StringArgs = struct {
 /// In addition to `StringArgs`, the parser can be configured to recognize
 /// comments or single quoted arguments (').
 /// This could be use to parse args from a file.
+///
+/// See `GenericArgs` for the implementation type and methods.
 pub fn GeneralArgs(comptime options: std.process.ArgIteratorGeneralOptions) type {
     return struct {
         pub const Iter = GenericArgs(std.process.ArgIteratorGeneral(options), true);
@@ -61,6 +67,8 @@ pub fn GeneralArgs(comptime options: std.process.ArgIteratorGeneralOptions) type
 /// The slice represents the already parsed/quoted arguments.
 /// This type can be used with the slice returned by `std.process.argsAlloc`.
 /// This lexer can be reset for multi-pass parsing.
+///
+/// See `GenericArgs` for the implementation type and methods.
 pub const SliceArgs = struct {
     pub const SliceIter = struct {
         args: []const [:0]const u8,
@@ -89,6 +97,8 @@ pub const SliceArgs = struct {
 /// An args lexer over `std.os.argv`.
 /// Can only be used on supported OS.
 /// Can be reset for multi-pass parsing.
+///
+/// See `GenericArgs` for the implementation type and methods.
 pub const OsArgs = struct {
     const OsIter = struct {
         args: []const [*:0]const u8,
