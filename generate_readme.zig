@@ -2,19 +2,20 @@ const std = @import("std");
 const build_vars = @import("build_vars");
 
 pub fn main() !void {
-    var bufout = std.io.bufferedWriter(std.io.getStdOut().writer());
-    var bo = bufout.writer();
+    var stdout_buf: [4069]u8 = undefined;
+    var stdout = std.fs.File.stdout();
+    var stdout_writer = stdout.writer(&stdout_buf);
 
     const readme_tpl = @embedFile("README.md.template");
 
-    try bo.print(readme_tpl, .{
+    try stdout_writer.interface.print(readme_tpl, .{
         .name = build_vars.lib_name,
         .repo = build_vars.repo,
         .demo = read("examples/demo.zig"),
         .usage = read("examples/usage.zig"),
     });
 
-    try bufout.flush();
+    try stdout_writer.interface.flush();
 }
 
 fn read(comptime file: []const u8) []const u8 {

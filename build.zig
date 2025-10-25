@@ -115,13 +115,13 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("examples/" ++ example_name ++ ".zig"),
             .target = target,
             .optimize = optimize,
+            .single_threaded = true,
         });
         example_mod.addImport(Manifest.lib_name, mod);
 
         const example = b.addExecutable(.{
             .name = example_name,
             .root_module = example_mod,
-            .single_threaded = true,
         });
 
         all_step.dependOn(&example.step);
