@@ -118,11 +118,13 @@ pub fn main() !void {
         long: [:0]const u8 = "default",
         also: enum { auto, yes, no } = .auto,
         remainder: ?[]const [:0]const u8 = null,
+
+        _deinit_long: bool = false,
     };
 
     // Args can be read lazily (and on POSIX systems without allocations)
     // by using `Args`, which uses `std.process.args` internally.
-    var process_args = try args_lex.Args.init(alloc);
+    var process_args = (try args_lex.Args.init(alloc)).yieldEscape();
 
     // This should be a `defer` instead of the `errdefer`.
     // In this example, we explicitly ``deinit` the args lexer to test for
@@ -133,7 +135,7 @@ pub fn main() !void {
     // This can be used for args from `argsAlloc`
     const args_alloc = try std.process.argsAlloc(alloc);
     defer std.process.argsFree(alloc, args_alloc);
-    var slice_args = args_lex.SliceArgs.init(args_alloc);
+    var slice_args = args_lex.SliceArgs.init(args_alloc).yieldEscape();
     errdefer slice_args.deinit();
 
     // One benefit of SliceArgs is that they can be reset with `reset`.
@@ -142,7 +144,7 @@ pub fn main() !void {
 
     // We can also use `std.os.argv` if it is supported by the OS.
     var args_impls = if (comptime args_lex.OsArgs.isSupported()) impls: {
-        const os_args = args_lex.OsArgs.init();
+        const os_args = args_lex.OsArgs.init().yieldEscape();
         break :impls .{ process_args, slice_args, os_args };
     } else .{ process_args, slice_args };
 
@@ -155,6 +157,14 @@ pub fn main() !void {
         // If some args are required, they need to be wrapped in an option
         // and validated after the loop.
         var options: MyOptions = .{};
+        defer {
+            if (options.c) |c| alloc.free(c);
+            if (options._deinit_long) alloc.free(options.long);
+            if (options.remainder) |remainder| {
+                for (remainder) |value| alloc.free(value);
+                alloc.free(remainder);
+            }
+        }
 
         // The main lexing loop. `next` will return an `*Arg`.
         // Don't store to pointers without making a copy,
@@ -167,8 +177,8 @@ pub fn main() !void {
                 // args are no longer supposed to be parsed.
                 // That decision is up to the user, and we are doing just that.
                 .escape => {
-                    var remainder = std.ArrayList([:0]const u8).init(alloc);
-                    defer remainder.deinit();
+                    var remainder: std.ArrayList([:0]const u8) = .empty;
+                    defer remainder.deinit(alloc);
 
                     // `nextAsValue` will return the next args without any parsing
                     while (args.nextAsValue()) |arg_value| {
@@ -177,10 +187,10 @@ pub fn main() !void {
                         // It is recommended to `dupe` any slice that should
                         // remain valid after the parsing is done.
                         const value = try alloc.dupeZ(u8, arg_value);
-                        try remainder.append(value);
+                        try remainder.append(alloc, value);
                     }
 
-                    options.remainder = try remainder.toOwnedSlice();
+                    options.remainder = try remainder.toOwnedSlice(alloc);
                 },
                 // `arg` is one or more short flags, or a negative number.
                 // That is, it starts with `-`, but not with `--`.
@@ -238,6 +248,7 @@ pub fn main() !void {
                         // Here, the flag also requires a value.
                         const value = long.value orelse (args.nextAsValue() orelse return error.MissingValue);
                         options.long = try alloc.dupeZ(u8, value);
+                        options._deinit_long = true;
                     } else if (std.mem.eql(u8, long.flag, "also")) {
                         // Here, the flag has an optional value.
                         const value = long.value orelse args.nextAsValue();
@@ -271,8 +282,8 @@ pub fn main() !void {
             \\  --c: {?s}
             \\  --flag: {}
             \\  --long: {s}
-            \\  --also: {s}
-            \\  --remainder: {?s}
+            \\  --also: {t}
+            \\  --remainder: {?f}
             \\
         , .{
             @typeName(@TypeOf(args.*)),
@@ -281,8 +292,8 @@ pub fn main() !void {
             options.c,
             options.flag,
             options.long,
-            @tagName(options.also),
-            options.remainder,
+            options.also,
+            if (options.remainder) |r| std.fmt.alt(Strings{ .data = r }, .print) else null,
         });
 
         // explicit call to test that we don't have values pointing to the args buffer.
@@ -298,19 +309,24 @@ pub fn main() !void {
             .long = "value",
             .also = .yes,
             .remainder = &[_][:0]const u8{ "remaining", "--args" },
+            ._deinit_long = true,
         };
-        defer {
-            if (options.c) |c| alloc.free(c);
-            alloc.free(options.long);
-            if (options.remainder) |remainder| {
-                for (remainder) |value| alloc.free(value);
-                alloc.free(remainder);
-            }
-        }
 
         try std.testing.expectEqualDeep(expected, options);
     }
 }
+
+const Strings = struct {
+    data: []const []const u8,
+    pub fn print(self: Strings, writer: *std.io.Writer) !void {
+        var separator = false;
+        for (self.data) |string| {
+            if (separator) try writer.print(", ", .{});
+            try writer.print("{s}", .{string});
+            separator = true;
+        }
+    }
+};
 
 ```
 
