@@ -12,6 +12,6 @@
         "README.md.template",
         "examples/",
     },
-    .minimum_zig_version = "0.14.0-dev.3445+6c3cbb0c8",
+    .minimum_zig_version = "0.15.0",
     .fingerprint = 0x3de050efb4f37737,
 }
