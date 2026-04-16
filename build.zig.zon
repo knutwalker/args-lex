@@ -2,7 +2,7 @@
 
 .{
     .name = .args_lex,
-    .version = "0.2.0",
+    .version = "0.3.0",
     .paths = .{
         "build.zig",
         "build.zig.zon",
@@ -12,6 +12,6 @@
         "README.md.template",
         "examples/",
     },
-    .minimum_zig_version = "0.15.0",
+    .minimum_zig_version = "0.16.0",
     .fingerprint = 0x3de050efb4f37737,
 }

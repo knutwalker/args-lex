@@ -459,7 +459,7 @@ pub const Arg = union(enum) {
         return .{ .data = arg };
     }
 
-    pub fn print(arg: *const Arg, writer: *std.io.Writer) !void {
+    pub fn print(arg: *const Arg, writer: *std.Io.Writer) !void {
         switch (arg.*) {
             .shorts => |s| try writer.print("-{s}", .{s.flags}),
             .long => |l| if (l.value) |lv|
@@ -471,7 +471,7 @@ pub const Arg = union(enum) {
         }
     }
 
-    pub fn printShort(arg: *const Arg, writer: *std.io.Writer) !void {
+    pub fn printShort(arg: *const Arg, writer: *std.Io.Writer) !void {
         // render name of short flag
         switch (arg.*) {
             .shorts => |s| try writer.writeAll(s.flags),
@@ -479,7 +479,7 @@ pub const Arg = union(enum) {
         }
     }
 
-    pub fn printLong(arg: *const Arg, writer: *std.io.Writer) !void {
+    pub fn printLong(arg: *const Arg, writer: *std.Io.Writer) !void {
         // render name of long flag
         switch (arg.*) {
             .long => |l| try writer.writeAll(l.flag),
@@ -487,7 +487,7 @@ pub const Arg = union(enum) {
         }
     }
 
-    pub fn printValue(arg: *const Arg, writer: *std.io.Writer) !void {
+    pub fn printValue(arg: *const Arg, writer: *std.Io.Writer) !void {
         // render value
         switch (arg.*) {
             .long => |l| if (l.value) |lv| try writer.writeAll(lv),
@@ -496,7 +496,7 @@ pub const Arg = union(enum) {
         }
     }
 
-    pub fn printEscape(arg: *const Arg, writer: *std.io.Writer) !void {
+    pub fn printEscape(arg: *const Arg, writer: *std.Io.Writer) !void {
         // render escape
         switch (arg.*) {
             .escape => try writer.writeAll("--"),
@@ -508,7 +508,7 @@ pub const Arg = union(enum) {
         return struct {
             arg: *const Arg,
 
-            pub fn print(self: @This(), writer: *std.io.Writer) !void {
+            pub fn print(self: @This(), writer: *std.Io.Writer) !void {
                 if (self.arg.valueOf(.{name}, null)) |value| {
                     try writer.writeAll(value);
                 }
@@ -520,7 +520,7 @@ pub const Arg = union(enum) {
         return struct {
             arg: *const Arg,
 
-            pub fn print(self: @This(), writer: *std.io.Writer) !void {
+            pub fn print(self: @This(), writer: *std.Io.Writer) !void {
                 if (self.arg.valueOf(.{name}, null)) |value| {
                     try writer.writeAll(value);
                 }

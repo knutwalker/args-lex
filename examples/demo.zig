@@ -4,11 +4,8 @@ const std = @import("std");
 
 const args_lex = @import("args_lex");
 
-pub fn main() !void {
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer arena.deinit();
-
-    var args = try args_lex.Args.init(arena.allocator());
+pub fn main(init: std.process.Init) !void {
+    var args = try args_lex.Args.init(init.minimal.args, init.gpa);
     defer args.deinit();
 
     while (args.next()) |arg| {

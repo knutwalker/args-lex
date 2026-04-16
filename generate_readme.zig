@@ -1,16 +1,18 @@
 const std = @import("std");
+
 const build_vars = @import("build_vars");
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
     var stdout_buf: [4069]u8 = undefined;
-    var stdout = std.fs.File.stdout();
-    var stdout_writer = stdout.writer(&stdout_buf);
+    var stdout = std.Io.File.stdout();
+    var stdout_writer = stdout.writer(init.io, &stdout_buf);
 
     const readme_tpl = @embedFile("README.md.template");
 
     try stdout_writer.interface.print(readme_tpl, .{
         .name = build_vars.lib_name,
         .repo = build_vars.repo,
+        .zigv = build_vars.zigv,
         .demo = read("examples/demo.zig"),
         .usage = read("examples/usage.zig"),
     });

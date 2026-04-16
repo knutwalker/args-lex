@@ -12,19 +12,19 @@ A lexer to parse command line arguments
 > This is not a full CLI parser.
 > A lot of functionality is intentionally missing.
 
-## Features / Parsing capabilities*
+## Features / Parsing capabilities\*
 
 - Long arguments: `--flag`
-    - values separated by space or `=` (`--flag=value`, `--flag value`)
-    - multiple occurrences: `--flag one --flag two`
+  - values separated by space or `=` (`--flag=value`, `--flag value`)
+  - multiple occurrences: `--flag one --flag two`
 - Short arguments: `-a`
-    - multiple flags grouped together: `-abc`
-    - values separated by space or `=` (`-a=value`, `-a value`, `-avalue`)
-    - repeated flags: `-vvvv`
+  - multiple flags grouped together: `-abc`
+  - values separated by space or `=` (`-a=value`, `-a value`, `-avalue`)
+  - repeated flags: `-vvvv`
 - Positional arguments: `arg`
-    - escaping remaining arguments after `--`
+  - escaping remaining arguments after `--`
 
-_*_: Some of those features are not directly implemented by this library.
+_\*_: Some of those features are not directly implemented by this library.
 However, parsers written using the lexer can choose to support those features
 and are not locked out of anything.
 
@@ -49,7 +49,7 @@ exe.root_module.addImport("{[name]s}", b.dependency("{[name]s}", .{{}}).module("
 ```
 
 > [!IMPORTANT]
-> `{[name]s}` tracks Zig `0.15.0`
+> `{[name]s}` tracks Zig `{[zigv]s}`
 
 ## Examples
 

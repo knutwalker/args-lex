@@ -3,14 +3,14 @@
 const std = @import("std");
 
 const Manifest = struct {
-    name: @Type(.enum_literal),
+    name: @EnumLiteral(),
     version: []const u8,
     minimum_zig_version: []const u8,
     paths: []const []const u8,
     fingerprint: u64,
 
     const it: Manifest = @import("build.zig.zon");
-    const lib_name = std.mem.trimLeft(u8, @tagName(it.name), ".");
+    const lib_name = std.mem.trimStart(u8, @tagName(it.name), ".");
     const repo_name = repo_name: {
         var dashed_name_buf: [lib_name.len]u8 = undefined;
         @memcpy(&dashed_name_buf, lib_name);
@@ -31,7 +31,6 @@ pub fn build(b: *std.Build) void {
     const readme_step = b.step("readme", "Generate the README");
     const example_step = b.step("example", "Run an example");
     const fmt_step = b.step("fmt", "Run formatting checks");
-    const clean_step = b.step("clean", "Clean up");
 
     const all_step = b.step("all", "Build everything");
     all_step.dependOn(test_step);
@@ -73,13 +72,15 @@ pub fn build(b: *std.Build) void {
 
     // readme {{{
     const gen_readme_step = readme: {
-        const root_path = std.fs.path.relative(b.allocator, b.install_path, b.build_root.path.?) catch
-            break :readme @as(?*std.Build.Step.Run, null);
+        const cwd = (std.process.currentPathAlloc(b.graph.io, b.allocator) catch
+            break :readme @as(?*std.Build.Step.Run, null));
+        const root_path = try std.fs.path.relative(b.allocator, cwd, &b.graph.environ_map, b.install_path, b.build_root.path orelse cwd);
 
         // build vars {{{
         const build_vars = b.addOptions();
         build_vars.addOption([]const u8, "lib_name", Manifest.lib_name);
         build_vars.addOption([]const u8, "repo", b.fmt("https://github.com/knutwalker/{s}", .{Manifest.repo_name}));
+        build_vars.addOption([]const u8, "zigv", Manifest.it.minimum_zig_version);
         // }}}
 
         var gen_readme = b.addExecutable(.{
@@ -94,7 +95,7 @@ pub fn build(b: *std.Build) void {
 
         const run_gen_readme = b.addRunArtifact(gen_readme);
         run_gen_readme.addFileInput(b.path("README.md.template"));
-        const readme_file = run_gen_readme.captureStdOut();
+        const readme_file = run_gen_readme.captureStdOut(.{});
 
         readme_step.dependOn(&run_gen_readme.step);
 
@@ -157,14 +158,6 @@ pub fn build(b: *std.Build) void {
         .check = false,
     });
     fmt_step.dependOn(&fmt.step);
-    // }}}
-
-    // clean {{{
-    const install_path = std.Build.LazyPath{ .cwd_relative = b.getInstallPath(.prefix, "") };
-    clean_step.dependOn(&b.addRemoveDirTree(install_path).step);
-    if (@import("builtin").os.tag != .windows) {
-        clean_step.dependOn(&b.addRemoveDirTree(b.path(".zig-cache")).step);
-    }
     // }}}
 }
 

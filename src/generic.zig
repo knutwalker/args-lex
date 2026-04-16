@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: MIT
 
+const std = @import("std");
+const t = std.testing;
+
 const Arg = @import("arg.zig").Arg;
+const mkArgs = @import("args.zig").SliceArgs.init;
 
 pub fn verifyIter(comptime Iter: type) void {
     if (@hasDecl(Iter, "next") == false) {
@@ -197,9 +201,6 @@ pub fn GenericArgs(comptime Iter: type, comptime handle_escape: bool) type {
         };
     };
 }
-
-const t = std.testing;
-const mkArgs = @import("args.zig").SliceArgs.init;
 
 test "stdio" {
     var args = mkArgs(&.{ "bin", "-" });
@@ -487,5 +488,3 @@ test "Force analysis" {
         t.refAllDecls(@This());
     }
 }
-
-const std = @import("std");

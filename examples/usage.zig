@@ -4,10 +4,8 @@ const std = @import("std");
 
 const args_lex = @import("args_lex");
 
-pub fn main() !void {
-    var gpa: std.heap.GeneralPurposeAllocator(.{}) = .{};
-    defer _ = gpa.deinit();
-    const alloc = gpa.allocator();
+pub fn main(init: std.process.Init) !void {
+    const gpa = init.gpa;
 
     // The args should be provided by build.zig as:
     // `"-a -42 -bcdef --flag --long=value --also yes -- remaining --args"`
@@ -20,13 +18,11 @@ pub fn main() !void {
         long: [:0]const u8 = "default",
         also: enum { auto, yes, no } = .auto,
         remainder: ?[]const [:0]const u8 = null,
-
-        _deinit_long: bool = false,
     };
 
     // Args can be read lazily (and on POSIX systems without allocations)
     // by using `Args`, which uses `std.process.args` internally.
-    var process_args = (try args_lex.Args.init(alloc)).yieldEscape();
+    var process_args = (try args_lex.Args.init(init.minimal.args, gpa)).yieldEscape();
 
     // This should be a `defer` instead of the `errdefer`.
     // In this example, we explicitly ``deinit` the args lexer to test for
@@ -35,21 +31,30 @@ pub fn main() !void {
 
     // Process args can be read from an existing allocation with `SliceArgs`.
     // This can be used for args from `argsAlloc`
-    const args_alloc = try std.process.argsAlloc(alloc);
-    defer std.process.argsFree(alloc, args_alloc);
+    const args_alloc = try init.minimal.args.toSlice(init.arena.allocator());
     var slice_args = args_lex.SliceArgs.init(args_alloc).yieldEscape();
     errdefer slice_args.deinit();
-
     // One benefit of SliceArgs is that they can be reset with `reset`.
     // One might, for example, do a first pass to check for `--help`,
     // then `reset` and do a second pass for the actual parsing.
 
-    // We can also use `std.os.argv` if it is supported by the OS.
-    var args_impls = if (comptime args_lex.OsArgs.isSupported()) impls: {
-        const os_args = args_lex.OsArgs.init().yieldEscape();
-        break :impls .{ process_args, slice_args, os_args };
-    } else .{ process_args, slice_args };
+    // Args can also be created from a string, e.g. by reading them from
+    // an args file
+    const args_file_content =
+        \\-a
+        \\-42
+        \\-bcdef
+        \\--flag
+        \\--long=value
+        \\--also yes
+        \\--
+        \\remaining
+        \\--args
+    ;
+    var string_args = (try args_lex.StringArgs.init(gpa, args_file_content)).yieldEscape();
+    errdefer string_args.deinit();
 
+    var args_impls = .{ process_args, slice_args, string_args };
     inline for (&args_impls) |*args| {
 
         // Skip the binary name
@@ -59,12 +64,13 @@ pub fn main() !void {
         // If some args are required, they need to be wrapped in an option
         // and validated after the loop.
         var options: MyOptions = .{};
+        var deinit_long_option = false;
         defer {
-            if (options.c) |c| alloc.free(c);
-            if (options._deinit_long) alloc.free(options.long);
+            if (options.c) |c| gpa.free(c);
+            if (deinit_long_option) gpa.free(options.long);
             if (options.remainder) |remainder| {
-                for (remainder) |value| alloc.free(value);
-                alloc.free(remainder);
+                for (remainder) |value| gpa.free(value);
+                gpa.free(remainder);
             }
         }
 
@@ -80,7 +86,7 @@ pub fn main() !void {
                 // That decision is up to the user, and we are doing just that.
                 .escape => {
                     var remainder: std.ArrayList([:0]const u8) = .empty;
-                    defer remainder.deinit(alloc);
+                    defer remainder.deinit(gpa);
 
                     // `nextAsValue` will return the next args without any parsing
                     while (args.nextAsValue()) |arg_value| {
@@ -88,11 +94,11 @@ pub fn main() !void {
                         // invalidated when `deinit` is called.
                         // It is recommended to `dupe` any slice that should
                         // remain valid after the parsing is done.
-                        const value = try alloc.dupeZ(u8, arg_value);
-                        try remainder.append(alloc, value);
+                        const value = try gpa.dupeZ(u8, arg_value);
+                        try remainder.append(gpa, value);
                     }
 
-                    options.remainder = try remainder.toOwnedSlice(alloc);
+                    options.remainder = try remainder.toOwnedSlice(gpa);
                 },
                 // `arg` is one or more short flags, or a negative number.
                 // That is, it starts with `-`, but not with `--`.
@@ -121,7 +127,7 @@ pub fn main() !void {
                             // short flags can also take a value, optionally separated
                             // with a `=`. When we see the `c` flag, we take the
                             // remainder as its value.
-                            'c' => options.c = try alloc.dupeZ(u8, shorts.value()),
+                            'c' => options.c = try gpa.dupeZ(u8, shorts.value()),
                             else => return error.UnknownFlag,
                         },
                         // In case we encounter an invalid Unicode sequence as
@@ -149,8 +155,8 @@ pub fn main() !void {
                         // argument as value, no matter how it looks.
                         // Here, the flag also requires a value.
                         const value = long.value orelse (args.nextAsValue() orelse return error.MissingValue);
-                        options.long = try alloc.dupeZ(u8, value);
-                        options._deinit_long = true;
+                        options.long = try gpa.dupeZ(u8, value);
+                        deinit_long_option = true;
                     } else if (std.mem.eql(u8, long.flag, "also")) {
                         // Here, the flag has an optional value.
                         const value = long.value orelse args.nextAsValue();
@@ -211,7 +217,6 @@ pub fn main() !void {
             .long = "value",
             .also = .yes,
             .remainder = &[_][:0]const u8{ "remaining", "--args" },
-            ._deinit_long = true,
         };
 
         try std.testing.expectEqualDeep(expected, options);
@@ -220,7 +225,7 @@ pub fn main() !void {
 
 const Strings = struct {
     data: []const []const u8,
-    pub fn print(self: Strings, writer: *std.io.Writer) !void {
+    pub fn print(self: Strings, writer: *std.Io.Writer) !void {
         var separator = false;
         for (self.data) |string| {
             if (separator) try writer.print(", ", .{});
